@@ -21,7 +21,7 @@ uniformTime period0 a0 = fmap body $ wrap (UniformTime period0 0) f a0 where
   f a go dt (UniformTime period c m) = (a', UniformTime period c'') where
     c' = c + dt
     (n, c'') = fdivmod c' period
-    a' = iterateN n (advance period) a
+    a' = iterateN n (advance period) (modify (const m) a)
 
 iterateN :: Int -> (a -> a) -> a -> a
 iterateN 0 _ x = x

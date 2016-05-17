@@ -22,6 +22,6 @@ ship' x0 v0 =
   uniformTime 0.01 .
   rotating (0,1) 0 .
   toroidal 0 640 0 480 .
-  newtonian x0 v0 
+  newtonian x0 v0 (0,0)
 
 type ShipGuts = UniformTime (Rotating (Toroidal (Newtonian ())))
