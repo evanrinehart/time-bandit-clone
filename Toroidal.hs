@@ -1,6 +1,9 @@
 {-# LANGUAGE DeriveFunctor #-}
 module Toroidal where
 
+-- when wrapped directly on a newtonian animation, causes position to
+-- wrap around when it exits the specified bounds
+
 import Animation
 import Newtonian
 import Wrapper

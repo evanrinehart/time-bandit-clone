@@ -1,5 +1,7 @@
 module Asteroids where
 
+-- an asteroids ship animation
+
 import Animation
 import Newtonian
 import Rotating

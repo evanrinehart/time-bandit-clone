@@ -1,5 +1,7 @@
 module Clock where
 
+-- a number that increases with time according to a specified rate
+
 import Animation
 
 data Clock = Clock Time Rate deriving Show

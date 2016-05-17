@@ -1,5 +1,8 @@
 module Detect where
 
+-- an animation that continues until an event is detected, then it
+-- mutates
+
 data DetectTime a = NotBefore Time | At Time a deriving Show
 
 detect :: (m -> DetectTime a) -> (a -> m -> m) -> A m v -> A m v

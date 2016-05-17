@@ -1,6 +1,8 @@
 {-# LANGUAGE DeriveFunctor #-}
 module Newtonian where
 
+-- a wrapper that adds uniform motion to an animation
+
 import Animation
 import Wrapper
 

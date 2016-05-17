@@ -2,6 +2,8 @@
 {-# LANGUAGE DeriveFunctor #-}
 module Wrapper where
 
+-- the factored out wrapper code
+
 import Animation
 
 type Evolve m v = Delta -> m -> A m v

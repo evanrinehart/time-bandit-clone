@@ -1,5 +1,7 @@
 module Segment where
 
+-- a data structure for concatenating animation segments in time
+
 data Segs m a = End (A m a) | Segs Time (A m a) (m -> Segs m a)
 
 instance (Show m, Show a) => Show (Segs m a) where

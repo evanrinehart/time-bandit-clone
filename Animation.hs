@@ -2,6 +2,14 @@ module Animation where
 
 import Data.Fixed
 
+-- A m v is a modifiable animation which consists of
+-- m - the model which can be modified
+-- m -> v - the image of the model of type v (view)
+-- Delta -> m -> A m v - time-mutation, this algorithm ideally obeys a
+-- determinism law which lets a given A m v be interpreted as a continuous
+-- flow of m and v through time. (for any sequence of Deltas, the iterated
+-- sequence of m and v are consistent for any chosen t in time)
+
 data A m v = A m (m -> v) (Delta -> m -> A m v)
 
 type T = Pico

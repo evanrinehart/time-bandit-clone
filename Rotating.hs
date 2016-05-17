@@ -1,6 +1,8 @@
 {-# LANGUAGE DeriveFunctor #-}
 module Rotating where
 
+-- a wrapper that adds a direction and speed of rotation to an animation
+
 import Animation
 import Wrapper
 

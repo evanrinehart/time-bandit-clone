@@ -3,6 +3,8 @@
 {-# LANGUAGE DeriveFunctor #-}
 module Collection where
 
+-- ways to animate collections, work in progress
+
 import Data.Bifunctor
 import qualified Data.Map as M
 

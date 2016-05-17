@@ -1,6 +1,8 @@
 {-# LANGUAGE DeriveFunctor #-}
 module Physics where
 
+-- a wrapper that regulates the passage of time
+
 import Animation
 import Collection
 import Wrapper
