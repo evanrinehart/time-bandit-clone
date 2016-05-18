@@ -12,6 +12,7 @@ import Newtonian
 import Collection
 import PingPong
 import Asteroids
+import Alt
 
 circle :: A Clock R2
 circle = fmap ((\t -> (cos t, sin t)) . realToFrac) (clock 0 1)
