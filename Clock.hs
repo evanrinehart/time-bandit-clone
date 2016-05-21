@@ -1,22 +1,16 @@
 module Clock where
 
--- a number that increases with time according to a specified rate
-
 import Animation
+import Path
 
-data Clock = Clock Time Rate deriving Show
+data Clock dt = Clock dt dt deriving Show
 
-time :: Clock -> Time
-time (Clock t _) = t
+clock :: Num dt => dt -> dt -> A dt (Clock dt)
+clock c0 rate0 = A (Clock c0 rate0) go where
+  go dt (Clock c0 rate0) = Clock (c0 + dt*rate0) rate0
 
-clock :: Time -> Rate -> A Clock Time
-clock t0 speed0 = (fmap time . anim shift) (Clock t0 speed0)
+time :: Path (Clock dt) dt
+time = Path (w8 0) (\(Clock x _) -> Just x) (\f (Clock x y) -> Clock (f x) y)
 
-shift :: Delta -> Clock -> Clock
-shift dt (Clock t rate) = Clock (t + dt*rate) rate
-
-onTime :: (Time -> Time) -> Clock -> Clock
-onTime f (Clock a b) = Clock (f a) b
-
-onSpeed :: (Rate -> Rate) -> Clock -> Clock
-onSpeed f (Clock a b) = Clock a (f b)
+rate :: Path (Clock dt) dt
+rate = Path (w8 1) (\(Clock _ y) -> Just y) (\f (Clock x y) -> Clock x (f y))

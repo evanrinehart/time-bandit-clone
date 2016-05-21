@@ -1,16 +1,12 @@
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE LambdaCase #-}
 module Animation where
 
 import Data.Fixed
+import Data.Map as M
+import Data.Set as S
 
--- A m v is a modifiable animation which consists of
--- m - the model which can be modified
--- m -> v - the image of the model of type v (view)
--- Delta -> m -> A m v - time-mutation, this algorithm ideally obeys a
--- determinism law which lets a given A m v be interpreted as a continuous
--- flow of m and v through time. (for any sequence of Deltas, the iterated
--- sequence of m and v are consistent for any chosen t in time)
-
-data A m v = A m (m -> v) (Delta -> m -> A m v)
+data A dt a = A a (dt -> a -> a)
 
 type T = Pico
 type Delta = T
@@ -19,49 +15,37 @@ type Rate = T
 type R = Double
 type R2 = (R,R)
 
-type Blank = A () ()
+type Animation a = A Delta a
+type Go dt a = dt -> a -> a
+type Mapper1 f = forall a . (a -> a) -> f a -> f a
 
-view :: A m v -> v
-view (A m view _) = view m
+sample :: A dt a -> a
+sample (A x _) = x
 
-model :: A m v -> m
-model (A m _ _) = m
+advance :: dt -> A dt a -> A dt a
+advance dt (A x go) = A (go dt x) go
 
-advance :: Delta -> A m v -> A m v
-advance dt (A m view go) = go dt m
+modify :: (a -> a) -> A dt a -> A dt a
+modify f (A x go) = A (f x) go
 
-modify :: (m -> m) -> A m v -> A m v
-modify f (A m view go) = A (f m) view go
+isoMap :: (a -> b) -> (b -> a) -> A dt a -> A dt b
+isoMap f g (A x go) = A (f x) go' where
+  go' dt y = f (go dt (g y))
 
-mapView :: (u -> v) -> A m u -> A m v
-mapView f (A m view go0) = A m (fmap f view) (go go0) where
-  go innerGo m dt =
-    let A m' view' go' = innerGo m dt in
-    A m' (fmap f view') (go go')
+still :: a -> A dt a
+still x = A x (const id)
 
-isoModel :: (m -> n) -> (n -> m) -> A m v -> A n v
-isoModel f g (A m view go0) = A (f m) (view . g) (go go0) where
-  go innerGo dt n =
-    let A m' view' go' = innerGo dt (g n) in
-    A (f m') (view' . g) (go go')
+instance (Show a) => Show (A dt a) where
+  show (A x _) = show x 
 
-anim :: (Delta -> m -> m) -> m -> A m m
-anim f m0 = A m0 id go where
-  go dt m = A (f dt m) id go
-    
-still :: v -> A v v
-still x = anim (const id) x
+wrap1 :: f a -> ((a -> a) -> f a -> f a) -> (dt -> a -> a) -> A dt (f a)
+wrap1 x0 map go = A x0 go' where
+  go' dt x = map (go dt) x
 
-blank :: A () ()
-blank = A () id (\_ _ -> blank)
+barn :: Ord k => [(k,a)] -> (dt -> a -> a) -> A dt (Map k a)
+barn kv0 go = wrap1 (M.fromList kv0) M.map go
 
-instance Functor (A m) where
-  fmap = mapView
+ability :: (a -> f a) -> (dt -> (dt -> a -> a) -> f a -> f a) -> A dt a -> A dt (f a)
+ability mk go' (A x go) = A (mk x) go'' where
+  go'' dt y = go' dt go y
 
-instance (Show m, Show v) => Show (A m v) where
-  show (A x view advance) = show x ++ " >- " ++ show (view x)
-
-x & f = f x
-
-class Functor f => Payload f where
-  payload :: f a -> a

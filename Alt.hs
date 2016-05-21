@@ -19,6 +19,10 @@ toggle :: Alt a b -> Alt a b
 toggle (Alt1 x y) = Alt2 x y
 toggle (Alt2 x y) = Alt1 x y
 
+toEither :: Alt a b -> Either a b
+toEither (Alt1 x _) = Left x
+toEither (Alt2 _ y) = Right y
+
 alt1 :: Path (Alt a b) a
 alt1 = Path (single 0) g e where
   g (Alt1 x _) = x
