@@ -1,4 +1,5 @@
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE LambdaCase #-}
 module Algorithm where
 
 import Prelude hiding ((.),id)
@@ -7,6 +8,8 @@ import Data.IntMap (IntMap)
 import Data.List (intersperse, foldl')
 import qualified Data.IntSet as IS
 import Data.IntSet (IntSet)
+import Control.Concurrent
+import Data.Fixed
 
 import Dispatcher as D
 import Plan
@@ -34,6 +37,8 @@ import Control.Category
 
 data Rule dt s = Rule String (Plan s (dt, Poke s ()))
 
+data RuleStatus dt = Inactive Int String String | Staged Int String dt
+
 data Sim dt s = Sim
   { simAnimation :: A dt s
   , simIndex :: DepIndex
@@ -52,12 +57,12 @@ instance (Show dt, Show s) => Show (Sim dt s) where
 newSimulation :: (Num dt, Ord dt) => A dt s -> [Rule dt s] -> Sim dt s
 newSimulation anim rules = Sim anim ix rs disp where
   numberedRules = zip [0..] rules
-  (actions0, ix) = step00 (sample anim) numberedRules
+  (actions0, ix) = evaluateRules (sample anim) numberedRules
   rs = IM.fromList numberedRules
   disp = D.Disp 0 (map (\(dt,i,act) -> (dt,(i,act))) actions0)
 
-step00 :: s -> [(Int, Rule dt s)] -> ([(dt, Int, Poke s ())], DepIndex)
-step00 s xs = fmap DI.fromList (go [] [] xs) where
+evaluateRules :: s -> [(Int, Rule dt s)] -> ([(dt, Int, Poke s ())], DepIndex)
+evaluateRules s xs = fmap DI.fromList (go [] [] xs) where
   go o ix [] = (o, ix)
   go o ix ((i,Rule name pl):xs) = case runPlan s pl of
     Left (msg, reps) -> go o (map (,i) reps ++ ix) xs
@@ -88,9 +93,19 @@ applyPoke poke sim@(Sim a ix rs disp) = case runPoke (sample a) poke of
     getRuleWithNumber i = (i,r) where
       Just r = IM.lookup i rs
     numberedRules = map getRuleWithNumber (IS.toList affectedRids)
-    (newTasks, ix'') = step00 s' numberedRules
+    (newTasks, ix'') = evaluateRules s' numberedRules
     ix''' = ix' `DI.union` ix''
     disp'' = foldl' (\d (dt,i,poke) -> D.insert dt (i,poke) d) disp' newTasks
+
+evalRule :: (Num dt, Ord dt) => Int -> Sim dt s -> Sim dt s
+evalRule i (Sim a ix rs disp) = case IM.lookup i rs of
+  Nothing -> error ("rule " ++ show i ++ " not found")
+  Just (Rule name pl) -> case runPlan (sample a) pl of
+    Left (msg, reps) -> Sim a ix' rs disp where
+      ix' = ix `DI.union` (DI.fromList (map (,i) reps))
+    Right ((dt,poke), reps) -> Sim a ix' rs disp' where
+      ix' = ix `DI.union` (DI.fromList (map (,i) reps))
+      disp' = D.insert dt (i,poke) disp
       
 example :: Num dt => Rule dt (Int, (Char, Bool))
 example = Rule "example" $ do
@@ -104,3 +119,24 @@ example2 = Rule "example2" $ do
   r <- view rate
   let hmm = -t / r
   if hmm < 0 then fail "time out" else return (hmm, return ())
+
+exsim :: Sim Pico (Clock Pico (), Clock Pico ())
+exsim = newSimulation 
+  (A (Clock 0 1 (), Clock 1 (-1) ()) (fuse (clock blank) (clock blank)))
+  []
+  
+
+test :: (Num dt, RealFrac dt, Show s) => Sim dt s -> IO ()
+test sim = go us dt sim where
+  dt = 0.1
+  us = ceiling (dt * 1000000)
+  go us dt sim = do
+    print (simAnimation sim)
+    threadDelay us
+    case animate dt sim of
+      Left sim' -> test sim'
+      Right (sim', dt', ruleId, poke) -> do
+        let (sim'', ios, reqs) = applyPoke poke sim'
+        sequence_ ios
+        --nothing
+        go (ceiling (dt' * 1000000)) dt' sim''
