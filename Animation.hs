@@ -37,6 +37,9 @@ isoMap f g go dt y = f (go dt (g y))
 anim :: a -> Go dt a -> A dt a
 anim = A
 
+blank :: Go dt ()
+blank _ _ = ()
+
 instance (Show a) => Show (A dt a) where
   show (A x _) = show x
 

@@ -1,16 +1,19 @@
+{-# LANGUAGE DeriveFunctor #-}
 module Clock where
 
 import Animation
 import Path
 
-data Clock dt = Clock !dt !dt deriving Show
+data Clock dt a = Clock !dt !dt a deriving (Functor, Show)
 
-clock :: Num dt => dt -> dt -> A dt (Clock dt)
-clock c0 rate0 = A (Clock c0 rate0) go where
-  go dt (Clock c0 rate0) = Clock (c0 + dt*rate0) rate0
+clock :: Num dt => Go dt a -> Go dt (Clock dt a)
+clock go dt (Clock c rate y) = Clock (c + dt*rate) rate $! (go dt y)
 
-time :: Path (Clock dt) dt
-time = Path (w8 0) (\(Clock x _) -> Just x) (\f (Clock x y) -> Clock (f x) y)
+instance Body (Clock dt) where
+  getBody (Clock _ _ x) = x
 
-rate :: Path (Clock dt) dt
-rate = Path (w8 1) (\(Clock _ y) -> Just y) (\f (Clock x y) -> Clock x (f y))
+time :: Path (Clock dt a) dt
+time = Path (w8 0) (\(Clock x _ _) -> Just x) (\f (Clock x y z) -> Clock (f x) y z)
+
+rate :: Path (Clock dt a) dt
+rate = Path (w8 1) (\(Clock _ y _) -> Just y) (\f (Clock x y z) -> Clock x (f y) z)

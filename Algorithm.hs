@@ -98,7 +98,7 @@ example = Rule "example" $ do
   when (c == 'x') (fail "miserably")
   return (0, return ())
 
-example2 :: Rule Delta (Clock Delta)
+example2 :: Rule Delta (Clock Delta ())
 example2 = Rule "example2" $ do
   t <- view time
   r <- view rate
