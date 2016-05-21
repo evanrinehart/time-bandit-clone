@@ -31,14 +31,17 @@ w64 x = BS.pack
   , byte 1 x
   , byte 0 x ]
 
-get :: Path s a -> s -> Maybe a
-get (Path _ g _) x = g x
+pathGet :: Path s a -> s -> Maybe a
+pathGet (Path _ g _) x = g x
 
-update :: Path s a -> (a -> a) -> s -> s
-update (Path _ _ e) f x = e f x
+pathUpdate :: Path s a -> (a -> a) -> s -> s
+pathUpdate (Path _ _ e) f x = e f x
 
 pathRep :: Path s a -> ByteString
 pathRep (Path bs _ _) = bs
+
+unit :: Path () ()
+unit = Path (w8 0) Just (const id)
 
 first :: Path (a, b) a
 first = Path (w8 0) (Just . fst) (\f (x,y) -> (f x, y))
@@ -73,3 +76,4 @@ class Functor f => Body f where
 
 body :: Body f => Path (f a) a
 body = Path (w8 0) (Just . getBody) fmap
+

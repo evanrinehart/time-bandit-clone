@@ -1,12 +1,16 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE BangPatterns #-}
 module Animation where
 
 import Data.Fixed
-import Data.Map as M
+import Data.Map.Strict as M
 import Data.Set as S
+import Data.Bifunctor
+import Data.Monoid
+import Control.Applicative (liftA2)
 
-data A dt a = A a (dt -> a -> a)
+data A dt a = A !a (dt -> a -> a)
 
 type T = Pico
 type Delta = T
@@ -17,7 +21,6 @@ type R2 = (R,R)
 
 type Animation a = A Delta a
 type Go dt a = dt -> a -> a
-type Mapper1 f = forall a . (a -> a) -> f a -> f a
 
 sample :: A dt a -> a
 sample (A x _) = x
@@ -28,24 +31,17 @@ advance dt (A x go) = A (go dt x) go
 modify :: (a -> a) -> A dt a -> A dt a
 modify f (A x go) = A (f x) go
 
-isoMap :: (a -> b) -> (b -> a) -> A dt a -> A dt b
-isoMap f g (A x go) = A (f x) go' where
-  go' dt y = f (go dt (g y))
+isoMap :: (a -> b) -> (b -> a) -> Go dt a -> Go dt b
+isoMap f g go dt y = f (go dt (g y))
 
-still :: a -> A dt a
-still x = A x (const id)
+anim :: a -> Go dt a -> A dt a
+anim = A
 
 instance (Show a) => Show (A dt a) where
-  show (A x _) = show x 
+  show (A x _) = show x
 
-wrap1 :: f a -> ((a -> a) -> f a -> f a) -> (dt -> a -> a) -> A dt (f a)
-wrap1 x0 map go = A x0 go' where
-  go' dt x = map (go dt) x
+wrap :: Functor f => Go dt a -> Go dt (f a)
+wrap = (fmap .)
 
-barn :: Ord k => [(k,a)] -> (dt -> a -> a) -> A dt (Map k a)
-barn kv0 go = wrap1 (M.fromList kv0) M.map go
-
-ability :: (a -> f a) -> (dt -> (dt -> a -> a) -> f a -> f a) -> A dt a -> A dt (f a)
-ability mk go' (A x go) = A (mk x) go'' where
-  go'' dt y = go' dt go y
-
+fuse :: Bifunctor f => Go dt a -> Go dt b -> Go dt (f a b)
+fuse = liftA2 bimap

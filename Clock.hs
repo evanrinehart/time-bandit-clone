@@ -3,7 +3,7 @@ module Clock where
 import Animation
 import Path
 
-data Clock dt = Clock dt dt deriving Show
+data Clock dt = Clock !dt !dt deriving Show
 
 clock :: Num dt => dt -> dt -> A dt (Clock dt)
 clock c0 rate0 = A (Clock c0 rate0) go where
