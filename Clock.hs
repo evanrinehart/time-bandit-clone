@@ -6,7 +6,7 @@ import Path
 
 data Clock dt a = Clock !dt !dt a deriving (Functor, Show)
 
-clock :: Num dt => Go dt a -> Go dt (Clock dt a)
+clock :: Num dt => A dt a -> A dt (Clock dt a)
 clock go dt (Clock c rate y) = Clock (c + dt*rate) rate $! (go dt y)
 
 instance Body (Clock dt) where

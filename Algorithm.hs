@@ -1,5 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ExistentialQuantification #-}
 module Algorithm where
 
 import Prelude hiding ((.),id)
@@ -10,6 +12,7 @@ import qualified Data.IntSet as IS
 import Data.IntSet (IntSet)
 import Control.Concurrent
 import Data.Fixed
+import Control.Monad (forM_)
 
 import Dispatcher as D
 import Plan
@@ -18,6 +21,7 @@ import Animation as A
 import Path
 import Viewing
 import DepIndex as DI
+import Workers as W
 
 import Pause
 import Clock
@@ -36,28 +40,30 @@ import Control.Category
 -}
 
 data Rule dt s = Rule String (Plan s (dt, Poke s ()))
-
+data Handler s = forall a . Handler (IO a) [a -> Poke s ()]
 data RuleStatus dt = Inactive Int String String | Staged Int String dt
 
 data Sim dt s = Sim
-  { simAnimation :: A dt s
+  { simModel :: s
+  , simAnimation :: A dt s
   , simIndex :: DepIndex
   , simRules :: IntMap (Rule dt s)
   , simDisp :: Disp dt (Int, Poke s ())
+  , simHandlers :: [Handler s]
   } 
 
 instance (Show dt, Show s) => Show (Sim dt s) where
-  show (Sim x ix rules disp) = "Sim {" ++ (concat . intersperse "," $
+  show (Sim x _ ix rules disp _) = "Sim {" ++ (concat . intersperse "," $
     [show x
     ,show ix
     ,show (map (\(Rule name _) -> name) $ IM.elems rules)
     ,show (fmap fst disp)
     ] ) ++ "}"
 
-newSimulation :: (Num dt, Ord dt) => A dt s -> [Rule dt s] -> Sim dt s
-newSimulation anim rules = Sim anim ix rs disp where
+newSimulation :: (Num dt, Ord dt) => s -> A dt s -> [Rule dt s] -> [Handler s] -> Sim dt s
+newSimulation s adv rules handlers = Sim s adv ix rs disp handlers where
   numberedRules = zip [0..] rules
-  (actions0, ix) = evaluateRules (sample anim) numberedRules
+  (actions0, ix) = evaluateRules s numberedRules
   rs = IM.fromList numberedRules
   disp = D.Disp 0 (map (\(dt,i,act) -> (dt,(i,act))) actions0)
 
@@ -69,24 +75,15 @@ evaluateRules s xs = fmap DI.fromList (go [] [] xs) where
     Right ((dt,poke), reps) -> go ((dt,i,poke):o) (map (,i) reps ++ ix) xs
 
 animate :: (Num dt, Ord dt) => dt -> Sim dt s -> Either (Sim dt s) (Sim dt s, dt, Int, Poke s ())
-animate dt sim@(Sim a ix rs disp) = case D.advance dt disp of
-  (Nothing, disp') -> Left sim' where
-    sim' = sim
-      { simAnimation = A.advance dt a
-      , simDisp = disp'
-      }
+animate dt sim@(Sim s adv ix rs disp hs) = case D.advance dt disp of
+  (Nothing, disp') -> Left (Sim (adv dt s) adv ix rs disp' hs)
   (Just ((i,poke), dt'), disp') -> Right (sim', dt - dt', i, poke) where
-    sim' = sim
-      { simAnimation = A.advance dt' a
-      , simIndex = DI.remove i ix
-      , simDisp = disp' }
+    sim' = Sim (adv dt' s) adv (DI.remove i ix) rs disp' hs
 
--- do this
 applyPoke :: (Num dt, Ord dt) => Poke s () -> Sim dt s -> (Sim dt s, [IO ()], [Request s])
-applyPoke poke sim@(Sim a ix rs disp) = case runPoke (sample a) poke of
+applyPoke poke sim@(Sim s adv ix rs disp hs) = case runPoke s poke of
   Left msg -> (sim, [], [])
-  Right (_,s',reps,ios,reqs) -> (Sim a' ix''' rs disp'', ios, reqs) where
-    a' = A.modify (const s') a
+  Right (_,s',reps,ios,reqs) -> (Sim s' adv ix''' rs disp'' hs, ios, reqs) where
     affectedRids = foldl' IS.union IS.empty (map (DI.match ix) reps)
     disp' = D.deleteBy ((`IS.member` affectedRids).fst) disp
     ix' = DI.removeMany affectedRids ix
@@ -98,12 +95,12 @@ applyPoke poke sim@(Sim a ix rs disp) = case runPoke (sample a) poke of
     disp'' = foldl' (\d (dt,i,poke) -> D.insert dt (i,poke) d) disp' newTasks
 
 evalRule :: (Num dt, Ord dt) => Int -> Sim dt s -> Sim dt s
-evalRule i (Sim a ix rs disp) = case IM.lookup i rs of
+evalRule i (Sim s adv ix rs disp hs) = case IM.lookup i rs of
   Nothing -> error ("rule " ++ show i ++ " not found")
-  Just (Rule name pl) -> case runPlan (sample a) pl of
-    Left (msg, reps) -> Sim a ix' rs disp where
+  Just (Rule name pl) -> case runPlan s pl of
+    Left (msg, reps) -> Sim s adv ix' rs disp hs where
       ix' = ix `DI.union` (DI.fromList (map (,i) reps))
-    Right ((dt,poke), reps) -> Sim a ix' rs disp' where
+    Right ((dt,poke), reps) -> Sim s adv ix' rs disp' hs where
       ix' = ix `DI.union` (DI.fromList (map (,i) reps))
       disp' = D.insert dt (i,poke) disp
       
@@ -120,23 +117,84 @@ example2 = Rule "example2" $ do
   let hmm = -t / r
   if hmm < 0 then fail "time out" else return (hmm, return ())
 
-exsim :: Sim Pico (Clock Pico (), Clock Pico ())
+exsim :: Sim Delta (Clock Delta (), Clock Delta ())
 exsim = newSimulation 
-  (A (Clock 0 1 (), Clock 1 (-1) ()) (fuse (clock blank) (clock blank)))
+  (Clock 0 1 (), Clock 1 (-1) ())
+  (fuse (clock blank) (clock blank))
   []
-  
+  []
+
+data Interface dt s = Interface
+   { simWait :: dt -> IO ()
+   , simImage :: forall a . (s -> a) -> IO a
+   , simPoke :: Poke s () -> IO ()
+   , simKill :: IO ()
+   }
+
+instance Show (Interface dt s) where
+  show _ = "<Interface>"
 
 test :: (Num dt, RealFrac dt, Show s) => Sim dt s -> IO ()
 test sim = go us dt sim where
+  million = 1000000
   dt = 0.1
-  us = ceiling (dt * 1000000)
+  us = ceiling (dt * million)
   go us dt sim = do
-    print (simAnimation sim)
+    print (simModel sim)
     threadDelay us
     case animate dt sim of
       Left sim' -> test sim'
       Right (sim', dt', ruleId, poke) -> do
         let (sim'', ios, reqs) = applyPoke poke sim'
         sequence_ ios
-        --nothing
-        go (ceiling (dt' * 1000000)) dt' sim''
+        let sim''' = evalRule ruleId sim''
+        --asyncs
+        go (ceiling (dt' * million)) dt' sim'''
+
+spawnRequests :: Workers -> MVar (Sim dt s) -> [Request s] -> IO ()
+spawnRequests workers mv reqs = do
+  return ()
+
+handleInput :: (Num dt, Ord dt)
+            => Workers
+            -> MVar (Sim dt s)
+            -> Poke s ()
+            -> IO ()
+handleInput workers mv poke = modifyMVar_ mv $ \sim -> do
+  let (sim', ios, reqs) = applyPoke poke sim
+  sequence_ ios
+  spawnRequests workers mv reqs
+  return sim'
+
+run :: (Num dt, Ord dt) => Sim dt s -> IO (Interface dt s)
+run sim = iface where
+  iface = do
+    mv <- newMVar sim 
+    workers <- newWorkers
+    forM_ (simHandlers sim) $ \(Handler io hs) -> do
+      forM_ hs $ \h -> do
+        spawnInputHandler "(untitled)" workers io (handleInput workers mv . h)
+    withMVar workers print
+    return $ Interface
+      (advance mv workers)
+      (image mv)
+      (input mv workers)
+      (kill mv workers)
+  advance mv workers dt = modifyMVar_ mv (go dt) where
+    go dt sim = case animate dt sim of
+      Left sim' -> return sim'
+      Right (sim', dt', ruleId, poke) -> do
+        let (sim'', ios, reqs) = applyPoke poke sim'
+        let sim''' = evalRule ruleId sim''
+        sequence_ ios
+        spawnRequests workers mv reqs
+        go dt' sim'''
+  image mv f = withMVar mv (return . f . simModel)
+  input mv workers poke = modifyMVar_ mv $ \sim -> do
+    let (sim', ios, reqs) = applyPoke poke sim
+    sequence_ ios
+    spawnRequests workers mv reqs
+    return sim'
+  kill mv workers = do
+    takeMVar mv
+    clearWorkers workers

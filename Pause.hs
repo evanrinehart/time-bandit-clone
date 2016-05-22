@@ -19,7 +19,7 @@ instance Body Pause where
   getBody (Paused x) = x
   getBody (Unpaused x) = x
 
-pausable :: Go dt a -> Go dt (Pause a)
+pausable :: A dt a -> A dt (Pause a)
 pausable go dt = \case
   Paused x -> Paused x
   Unpaused x -> Unpaused $! go dt x
