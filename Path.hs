@@ -72,7 +72,6 @@ instance Category Path where
 
 class Functor f => Body f where
   getBody :: f a -> a
-  --updateBody :: (a -> b) -> f a -> f b -- fmap
 
 body :: Body f => Path (f a) a
 body = Path (w8 0) (Just . getBody) fmap

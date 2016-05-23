@@ -8,8 +8,6 @@ import Data.Bifunctor
 import Control.Applicative (liftA2)
 
 type A dt a = dt -> a -> a
-type Delta = Pico
-type Anim a = A Delta a
 
 isoMap :: (a -> b) -> (b -> a) -> A dt a -> A dt b
 isoMap f g go dt y = f (go dt (g y))

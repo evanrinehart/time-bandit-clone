@@ -23,8 +23,6 @@ import Viewing
 import DepIndex as DI
 import Workers as W
 
-import Pause
-import Clock
 import Control.Monad (when)
 import Control.Category
 
@@ -103,26 +101,6 @@ evalRule i (Sim s adv ix rs disp hs) = case IM.lookup i rs of
     Right ((dt,poke), reps) -> Sim s adv ix' rs disp' hs where
       ix' = ix `DI.union` (DI.fromList (map (,i) reps))
       disp' = D.insert dt (i,poke) disp
-      
-example :: Num dt => Rule dt (Int, (Char, Bool))
-example = Rule "example" $ do
-  c <- view (second >>> first)
-  when (c == 'x') (fail "miserably")
-  return (0, return ())
-
-example2 :: Rule Delta (Clock Delta ())
-example2 = Rule "example2" $ do
-  t <- view time
-  r <- view rate
-  let hmm = -t / r
-  if hmm < 0 then fail "time out" else return (hmm, return ())
-
-exsim :: Sim Delta (Clock Delta (), Clock Delta ())
-exsim = newSimulation 
-  (Clock 0 1 (), Clock 1 (-1) ())
-  (fuse (clock blank) (clock blank))
-  []
-  []
 
 data Interface dt s = Interface
    { simWait :: dt -> IO ()
