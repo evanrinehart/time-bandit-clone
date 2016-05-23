@@ -4,14 +4,15 @@ module Rotating where
 -- a wrapper that adds a direction and speed of rotation to an animation
 
 import Animation
-import Wrapper
+import Path
+import Types
 
 data Rotating a = Rotating R2 R a deriving (Show, Functor)
 
-rotation :: Rotating a -> R2
+rotation :: Path (Rotating a) R2
 rotation (Rotating r _ _) = r
 
-rotvel :: Rotating a -> R
+rotvel :: Path (Rotating a) R2
 rotvel (Rotating _ v _) = v
 
 instance Payload Rotating where
