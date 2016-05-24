@@ -1,3 +1,3 @@
 ```
-data A m v = A m (m -> v) (Delta -> m -> A m v)
+type A dt a = dt -> a -> a
 ```

@@ -191,6 +191,11 @@ require p = do
   b <- view p
   when b (fail "requirement failed")
 
+requireThat :: (a -> Bool) -> Path s a -> Plan s ()
+requireThat f p = do
+  x <- view p
+  when (f x) (fail "requirement failed")
+
 planToWait :: dt -> Plan s (dt, Poke s ())
 planToWait dt = return (dt, return ())
 
