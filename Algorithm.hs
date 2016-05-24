@@ -107,6 +107,7 @@ data Interface dt s = Interface
    , simImage :: forall a . (s -> a) -> IO a
    , simPoke :: Poke s () -> IO ()
    , simKill :: IO ()
+   , simDebug :: IO (Sim dt s)
    }
 
 instance Show (Interface dt s) where
@@ -158,6 +159,7 @@ run sim = iface where
       (image mv)
       (input mv workers)
       (kill mv workers)
+      (debug mv)
   advance mv workers dt = modifyMVar_ mv (go dt) where
     go dt sim = case animate dt sim of
       Left sim' -> return sim'
@@ -176,3 +178,22 @@ run sim = iface where
   kill mv workers = do
     takeMVar mv
     clearWorkers workers
+  debug mv = withMVar mv return
+
+planToLater_ :: Poke s () -> dt -> Plan s (dt, Poke s ())
+planToLater_ poke dt = return (dt, poke)
+
+planToNow_ :: Num dt => Poke s () -> Plan s (dt, Poke s ())
+planToNow_ poke = return (0, poke)
+
+require :: Path s Bool -> Plan s ()
+require p = do
+  b <- view p
+  when b (fail "requirement failed")
+
+planToWait :: dt -> Plan s (dt, Poke s ())
+planToWait dt = return (dt, return ())
+
+planTo_ :: dt -> Poke s () -> Plan s (dt, Poke s ())
+planTo_ dt poke = return (dt, poke)
+

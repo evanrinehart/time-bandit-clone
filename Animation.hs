@@ -12,9 +12,6 @@ type A dt a = dt -> a -> a
 isoMap :: (a -> b) -> (b -> a) -> A dt a -> A dt b
 isoMap f g go dt y = f (go dt (g y))
 
-blank :: A dt ()
-blank _ _ = ()
-
 wrap :: Functor f => A dt a -> A dt (f a)
 wrap = (fmap .)
 

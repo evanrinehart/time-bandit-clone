@@ -68,7 +68,7 @@ right = Path (w8 1) g p where
 
 instance Category Path where
   id = Path mempty Just (const id)
-  (Path p1 g1 e1) . (Path p2 g2 e2) = Path (p1 <> p2) (g1 <=< g2) (e2 . e1)
+  (Path p1 g1 e1) . (Path p2 g2 e2) = Path (p2 <> p1) (g1 <=< g2) (e2 . e1)
 
 class Functor f => Body f where
   getBody :: f a -> a

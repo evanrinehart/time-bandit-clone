@@ -55,6 +55,9 @@ update path f = do
   let s' = pathUpdate path f s
   Poke (put s')
 
+set :: Path s a -> a -> Poke s ()
+set path x = update path (const x)
+
 execIO :: IO () -> Poke s ()
 execIO io = Poke (tell ([], [io], []))
 
