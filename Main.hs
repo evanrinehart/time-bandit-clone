@@ -1,7 +1,9 @@
+{-# LANGUAGE LambdaCase #-}
 module Main where
 
 import Graphics.Gloss
 import Graphics.Gloss.Interface.IO.Game
+import Graphics.Gloss.Juicy
 import qualified Data.Vector as V
 import Data.Monoid
 import System.Exit
@@ -26,8 +28,8 @@ main = do
   playIO mode black 60 iface render input wait
 
 input :: Event -> Iface -> IO Iface
-input e iface = foo >> return iface where
-  foo = case e of
+input ev iface = switch ev >> return iface where
+  switch = \case
     EventKey (Char 'w') dir _ _ -> simPoke iface (control (0,100) (dir==Down))
     EventKey (Char 'a') dir _ _ -> simPoke iface (control (-100,0) (dir==Down))
     EventKey (Char 's') dir _ _ -> simPoke iface (control (0,-100) (dir==Down))
@@ -44,7 +46,6 @@ wait dt iface = do
   (iface & simWait) (realToFrac dt)
   im <- simImage iface id
   inner <- simDebug iface
-  --print inner
   return iface
 
 render :: Iface -> IO Picture

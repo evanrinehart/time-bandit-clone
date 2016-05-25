@@ -61,9 +61,9 @@ infixl 6 .+.
 negateR2 (x,y) = (-x,-y)
 
 -- when will x enter the circle with radius 10, or give up
-predictEntry :: Phys1 a -> Either Pico Pico
+predictEntry :: Phys1 a -> Prediction Pico
 predictEntry (Phys1 x0 v0 u f pay) = go 1 x0 v0 where
-  go 0 x0 v0 = Left 1
+  go 0 x0 v0 = NotWithin 1
   go timeLeft x0 v0 =
     let r = 25 in
     let dt = 0.0001 in
@@ -72,13 +72,15 @@ predictEntry (Phys1 x0 v0 u f pay) = go 1 x0 v0 where
     let v1 = v0 .+. a .* dt in
     if lineCrossCircle x0 x1 r && outside x0 r && inside x1 r
       then let crossTime = solveLine x0 x1 0 dt (\x -> lineCrossCircle x0 x 25) in
-           Right (realToFrac (1 - timeLeft + crossTime))
+           InExactly (realToFrac (1 - timeLeft + crossTime))
       else go (max 0 (timeLeft - dt)) x1 v1
 
+data Prediction dt = NotWithin dt | InExactly dt deriving Show
+
 -- when will x leave the circle with radius 10, or give up
-predictExit :: Phys1 a -> Either Pico Pico
+predictExit :: Phys1 a -> Prediction Pico
 predictExit (Phys1 x0 v0 u f pay) = go 1 x0 v0 where
-  go 0 x0 v0 = Left 1
+  go 0 x0 v0 = NotWithin 1
   go timeLeft x0 v0 =
     let r = 25 in
     let dt = 0.0001 in
@@ -87,7 +89,7 @@ predictExit (Phys1 x0 v0 u f pay) = go 1 x0 v0 where
     let v1 = v0 .+. a .* dt in
     if lineCrossCircle x0 x1 r && outside x1 r && inside x0 r
       then let crossTime = solveLine x0 x1 0 dt (\x -> lineCrossCircle x0 x 25) in
-           Right (realToFrac (1 - timeLeft + crossTime))
+           InExactly (realToFrac (1 - timeLeft + crossTime))
       else go (max 0 (timeLeft - dt)) x1 v1
 
 outside :: R2 -> R -> Bool
