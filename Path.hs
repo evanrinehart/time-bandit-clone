@@ -9,6 +9,7 @@ import Data.ByteString (ByteString)
 import Data.Bits
 import Data.Word
 import Data.Map as M
+import Data.IntMap as IM
 import Control.Monad ((<=<))
 
 type Edit s a = (a -> a) -> s -> s
@@ -49,8 +50,11 @@ first = Path (w8 0) (Just . fst) (\f (x,y) -> (f x, y))
 second :: Path (a, b) b
 second = Path (w8 1) (Just . snd) (\f (x,y) -> (x, f y))
 
-key :: (Enum k, Ord k) => k -> Path (Map k a) a
-key k = Path (w64 . fromIntegral . fromEnum $ k) (M.lookup k) (\f -> M.adjust f k)
+mkey :: (Enum k, Ord k) => k -> Path (Map k a) a
+mkey k = Path (w64 . fromIntegral . fromEnum $ k) (M.lookup k) (\f -> M.adjust f k)
+
+imkey :: IM.Key -> Path (IntMap a) a
+imkey k = Path (w64 . fromIntegral . fromEnum $ k) (IM.lookup k) (\f -> IM.adjust f k)
 
 left :: Path (Either a b) a
 left = Path (w8 0) g p where

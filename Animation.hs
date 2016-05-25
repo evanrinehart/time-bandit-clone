@@ -3,6 +3,7 @@
 {-# LANGUAGE BangPatterns #-}
 module Animation where
 
+import Control.Concurrent (threadDelay)
 import Data.Fixed
 import Data.Bifunctor
 import Control.Applicative (liftA2)
@@ -17,3 +18,10 @@ wrap = (fmap .)
 
 fuse :: Bifunctor f => A dt a -> A dt b -> A dt (f a b)
 fuse = liftA2 bimap
+
+testA :: (Show a, Fractional dt) => A dt a -> a -> IO ()
+testA f x = do
+  print x
+  let x' = f 0.1 x
+  threadDelay 100000
+  testA f x'
