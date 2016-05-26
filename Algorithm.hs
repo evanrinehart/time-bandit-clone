@@ -58,8 +58,8 @@ instance (Show dt, Show s) => Show (Sim dt s) where
     ,show (fmap fst disp)
     ] ) ++ "}"
 
-newSimulation :: (Num dt, Ord dt) => s -> A dt s -> [Rule dt s] -> [Handler s] -> Sim dt s
-newSimulation s adv rules handlers = Sim s adv ix rs disp handlers where
+newSimulation :: (Num dt, Ord dt) => A dt s -> s -> [Rule dt s] -> [Handler s] -> Sim dt s
+newSimulation adv s rules handlers = Sim s adv ix rs disp handlers where
   numberedRules = zip [0..] rules
   (actions0, ix) = evaluateRules s numberedRules
   rs = IM.fromList numberedRules
@@ -119,7 +119,6 @@ test sim = go us dt sim where
   dt = 0.1
   us = ceiling (dt * million)
   go us dt sim = do
-    print (simModel sim)
     threadDelay us
     case animate dt sim of
       Left sim' -> test sim'
@@ -153,7 +152,6 @@ run sim = iface where
     forM_ (simHandlers sim) $ \(Handler io hs) -> do
       forM_ hs $ \h -> do
         spawnInputHandler "(untitled)" workers io (handleInput workers mv . h)
-    withMVar workers print
     return $ Interface
       (advance mv workers)
       (image mv)
@@ -202,3 +200,5 @@ planToWait dt = return (dt, return ())
 planTo_ :: dt -> Poke s () -> Plan s (dt, Poke s ())
 planTo_ dt poke = return (dt, poke)
 
+plan :: dt -> Poke s () -> Plan s (dt, Poke s ())
+plan dt poke = return (dt, poke)

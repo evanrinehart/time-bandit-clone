@@ -31,8 +31,11 @@ lookup (i,j) (Grid width h im) = Cell x w n e s where
   !s = IM.lookup (inj i (j-1)) im
   inj i j = i + width*j
 
-fromList :: [((Int,Int),a)] -> Int -> Int -> Grid a
-fromList kvs w h = g where
+fromList :: Int -> Int -> [((Int,Int),a)] -> Grid a
+fromList w h kvs = g where
   g = Grid w h (IM.fromList (Prelude.map (\((i,j),x) -> (inj i j,x)) kvs))
   inj i j = i + w*j
 
+toList :: Grid a -> [((Int,Int),a)]
+toList (Grid w h im) = Prelude.map f (IM.toList im) where
+  f (k,x) = ((k `mod` w, k `div` w), x)

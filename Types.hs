@@ -1,11 +1,16 @@
 module Types where
 
-import Data.Fixed
+import Animation
+
+type Anim a = A Double a
 
 type R = Double
 type R2 = (R,R)
-type Delta = Pico
+type Delta = Double
 type Time = Delta
+
+data Active = Active | InActive deriving Show
+data NextDir = Stop | North | South | East | West deriving Show
 
 getAngle :: R2 -> R2 -> R
 getAngle u v | norm u == 0 || norm v == 0 = 0
