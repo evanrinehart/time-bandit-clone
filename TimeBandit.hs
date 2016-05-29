@@ -64,7 +64,6 @@ playerArrivalRule :: PathTo Player
 playerArrivalRule _player zlpath = Rule "playerArrival" $ do
   dt <- required =<< timeUntilArrival <$> view (_plMotion . _player)
   pl <- view _player
-  let foo = plMotion pl
   grid <- lvlGrid . Z.current <$> view zlpath
   let mo = plMotion pl
   let facedir = facing mo
