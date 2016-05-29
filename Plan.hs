@@ -39,6 +39,18 @@ instance Viewing (Plan s) where
 instance Show (Plan s a) where
   show _ = "<Plan>"
 
+notApplicable :: Plan s a
+notApplicable = fail "not applicable"
+
+notApplicableIf :: Bool -> Plan s ()
+notApplicableIf b = if b then notApplicable else return ()
+
+applicableOnlyIf :: Bool -> Plan s ()
+applicableOnlyIf b = if b then return () else notApplicable
+
+required :: Maybe a -> Plan s a
+required = maybe (fail "view failed") return 
+
 abort :: String -> Plan s a
 abort msg = Plan (throwError msg)
 
@@ -48,10 +60,9 @@ addDep x = Plan (tell [x])
 withState :: (s -> a) -> Plan s a
 withState f = Plan (asks f)
 
-runPlan :: s -> Plan s a -> Either (String,[ByteString]) (a, [ByteString])
+runPlan :: s -> Plan s a -> (Maybe a, [ByteString])
 runPlan s (Plan act) =
   let (result, reps) = runWriter (runExceptT (runReaderT act s)) in
   case result of
-    Left msg -> Left (msg, reps)
-    Right x -> Right (x, reps)
-
+    Left msg -> (Nothing, reps)
+    Right x -> (Just x, reps)

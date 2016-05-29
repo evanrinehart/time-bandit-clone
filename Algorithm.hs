@@ -69,8 +69,8 @@ evaluateRules :: s -> [(Int, Rule dt s)] -> ([(dt, Int, Poke s ())], DepIndex)
 evaluateRules s xs = fmap DI.fromList (go [] [] xs) where
   go o ix [] = (o, ix)
   go o ix ((i,Rule name pl):xs) = case runPlan s pl of
-    Left (msg, reps) -> go o (map (,i) reps ++ ix) xs
-    Right ((dt,poke), reps) -> go ((dt,i,poke):o) (map (,i) reps ++ ix) xs
+    (Nothing, reps) -> go o (map (,i) reps ++ ix) xs
+    (Just (dt,poke), reps) -> go ((dt,i,poke):o) (map (,i) reps ++ ix) xs
 
 animate :: (Num dt, Ord dt) => dt -> Sim dt s -> Either (Sim dt s) (Sim dt s, dt, Int, Poke s ())
 animate dt sim@(Sim s adv ix rs disp hs) = case D.advance dt disp of
@@ -78,10 +78,10 @@ animate dt sim@(Sim s adv ix rs disp hs) = case D.advance dt disp of
   (Just ((i,poke), dt'), disp') -> Right (sim', dt - dt', i, poke) where
     sim' = Sim (adv dt' s) adv (DI.remove i ix) rs disp' hs
 
-applyPoke :: (Num dt, Ord dt) => Poke s () -> Sim dt s -> (Sim dt s, [IO ()], [Request s])
+applyPoke :: (Num dt, Ord dt) => Poke s () -> Sim dt s -> (Sim dt s, [Effect s])
 applyPoke poke sim@(Sim s adv ix rs disp hs) = case runPoke s poke of
-  Left msg -> (sim, [], [])
-  Right (_,s',reps,ios,reqs) -> (Sim s' adv ix''' rs disp'' hs, ios, reqs) where
+  Left msg -> (sim, [])
+  Right (_,s',reps,effs) -> (Sim s' adv ix''' rs disp'' hs, effs) where
     affectedRids = foldl' IS.union IS.empty (map (DI.match ix) reps)
     disp' = D.deleteBy ((`IS.member` affectedRids).fst) disp
     ix' = DI.removeMany affectedRids ix
@@ -96,9 +96,9 @@ evalRule :: (Num dt, Ord dt) => Int -> Sim dt s -> Sim dt s
 evalRule i (Sim s adv ix rs disp hs) = case IM.lookup i rs of
   Nothing -> error ("rule " ++ show i ++ " not found")
   Just (Rule name pl) -> case runPlan s pl of
-    Left (msg, reps) -> Sim s adv ix' rs disp hs where
+    (Nothing, reps) -> Sim s adv ix' rs disp hs where
       ix' = ix `DI.union` (DI.fromList (map (,i) reps))
-    Right ((dt,poke), reps) -> Sim s adv ix' rs disp' hs where
+    (Just (dt,poke), reps) -> Sim s adv ix' rs disp' hs where
       ix' = ix `DI.union` (DI.fromList (map (,i) reps))
       disp' = D.insert dt (i,poke) disp
 
@@ -123,15 +123,11 @@ test sim = go us dt sim where
     case animate dt sim of
       Left sim' -> test sim'
       Right (sim', dt', ruleId, poke) -> do
-        let (sim'', ios, reqs) = applyPoke poke sim'
-        sequence_ ios
+        let (sim'', effs) = applyPoke poke sim'
+        --execEffects workers mv effs
         let sim''' = evalRule ruleId sim''
         --asyncs
         go (ceiling (dt' * million)) dt' sim'''
-
-spawnRequests :: Workers -> MVar (Sim dt s) -> [Request s] -> IO ()
-spawnRequests workers mv reqs = do
-  return ()
 
 handleInput :: (Num dt, Ord dt)
             => Workers
@@ -139,9 +135,8 @@ handleInput :: (Num dt, Ord dt)
             -> Poke s ()
             -> IO ()
 handleInput workers mv poke = modifyMVar_ mv $ \sim -> do
-  let (sim', ios, reqs) = applyPoke poke sim
-  sequence_ ios
-  spawnRequests workers mv reqs
+  let (sim', effs) = applyPoke poke sim
+  execEffects workers mv effs
   return sim'
 
 run :: (Num dt, Ord dt) => Sim dt s -> IO (Interface dt s)
@@ -162,21 +157,25 @@ run sim = iface where
     go dt sim = case animate dt sim of
       Left sim' -> return sim'
       Right (sim', dt', ruleId, poke) -> do
-        let (sim'', ios, reqs) = applyPoke poke sim'
+        let (sim'', effs) = applyPoke poke sim'
         let sim''' = evalRule ruleId sim''
-        sequence_ ios
-        spawnRequests workers mv reqs
+        execEffects workers mv effs
         go dt' sim'''
   image mv f = withMVar mv (return . f . simModel)
   input mv workers poke = modifyMVar_ mv $ \sim -> do
-    let (sim', ios, reqs) = applyPoke poke sim
-    sequence_ ios
-    spawnRequests workers mv reqs
+    let (sim', effs) = applyPoke poke sim
+    execEffects workers mv effs
     return sim'
   kill mv workers = do
     takeMVar mv
     clearWorkers workers
   debug mv = withMVar mv return
+
+execEffects :: Workers -> MVar (Sim dt s) -> [Effect s] -> IO ()
+execEffects _ _ effs = forM_ effs $ \case
+  FireAndForget io -> io
+  RequestWithCallback io mtime cb -> do
+    return ()
 
 planToLater_ :: Poke s () -> dt -> Plan s (dt, Poke s ())
 planToLater_ poke dt = return (dt, poke)

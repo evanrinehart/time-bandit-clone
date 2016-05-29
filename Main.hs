@@ -13,6 +13,9 @@ import qualified TimeBandit
 import qualified Controller as TimeBandit
 import qualified Render as TimeBandit
 
+import Player as P
+import GameOver
+
 screenW = 640
 screenH = 480
 
@@ -24,10 +27,12 @@ main = iface >>= \x -> playIO mode black 60 x render input advance where
       EventKey (SpecialKey KeyEsc) _ _ _ -> do
         simKill iface
         exitSuccess
-      _ -> simPoke iface (TimeBandit.controller e)
+      _ -> do
+        simPoke iface (TimeBandit.controller e)
     return iface
   advance dt iface = do
     simWait iface (realToFrac dt)
+    --print =<< simDebug iface
+    --print =<< ((P.plJoy . TimeBandit.tbPlayer . ungameover . simModel) <$> simDebug iface)
     return iface
   iface = run (TimeBandit.simulation)
-

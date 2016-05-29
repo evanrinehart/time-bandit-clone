@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 module Grid where
 
+import Types
 import Data.IntMap as IM hiding (lookup)
 import qualified Data.IntMap as IM (lookup)
 import Data.Maybe
@@ -13,23 +14,26 @@ data Grid a = Grid
   } deriving (Show, Functor)
 
 data Cell a = Cell
-  { cellHere :: a
-  , cellWest :: Maybe a
+  { cellHere  :: a
   , cellNorth :: Maybe a
-  , cellEast :: Maybe a
+  , cellEast  :: Maybe a
   , cellSouth :: Maybe a
+  , cellWest  :: Maybe a
   } deriving (Show, Functor)
 
-lookup :: (Int,Int) -> Grid a -> Cell a
-lookup (i,j) (Grid width h im) = Cell x w n e s where
-  assert k =
-    if k < 0 || k > width*h-1 then error "grid index out of bounds" else k
-  !x = im ! (assert (inj i j))
-  !w = IM.lookup (inj (i-1) j) im
-  !n = IM.lookup (inj i (j+1)) im
-  !e = IM.lookup (inj (i+1) j) im
-  !s = IM.lookup (inj i (j-1)) im
-  inj i j = i + width*j
+type GridIx = (Int,Int)
+data Dir = North | South | East | West deriving (Eq, Show)
+
+lookup :: (Int,Int) -> Grid a -> Maybe (Cell a)
+lookup (i,j) (Grid width h im) =
+  let inj i j = i + width*j in
+  case IM.lookup (inj i j) im of
+    Nothing -> Nothing
+    Just !x -> Just (Cell x n e s w) where
+      !n = IM.lookup (inj i (j+1)) im
+      !e = IM.lookup (inj (i+1) j) im
+      !s = IM.lookup (inj i (j-1)) im
+      !w = IM.lookup (inj (i-1) j) im
 
 fromList :: Int -> Int -> [((Int,Int),a)] -> Grid a
 fromList w h kvs = g where
@@ -39,3 +43,22 @@ fromList w h kvs = g where
 toList :: Grid a -> [((Int,Int),a)]
 toList (Grid w h im) = Prelude.map f (IM.toList im) where
   f (k,x) = ((k `mod` w, k `div` w), x)
+
+cellDir :: Dir -> Cell a -> Maybe a
+cellDir North = cellNorth
+cellDir East  = cellEast
+cellDir South = cellSouth
+cellDir West  = cellWest
+
+gixPlusDir :: Dir -> GridIx -> GridIx
+gixPlusDir d (i,j) = case d of
+  North -> (i,j+1)
+  East  -> (i+1,j)
+  South -> (i,j-1)
+  West  -> (i-1,j)
+
+dirToVec :: Dir -> R2
+dirToVec North = ( 0, 1)
+dirToVec East  = ( 1, 0)
+dirToVec South = ( 0,-1)
+dirToVec West  = (-1, 0)

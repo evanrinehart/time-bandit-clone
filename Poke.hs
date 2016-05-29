@@ -3,6 +3,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE GADTs #-}
 module Poke where
 
 import Prelude hiding (read)
@@ -24,9 +25,12 @@ newtype Poke s a =
   deriving Functor
 
 type InnerMonad s = StateT s (WriterT (Output s) (Either String))
-type Output s = ([ByteString], [IO ()], [Request s])
-data Request s = forall a . Request (IO a) (Callback s a) (Maybe Int)
+type Output s = ([ByteString], [Effect s])
 type Callback s a = forall e . Exception e => Either e a -> Poke s ()
+
+data Effect s where
+  FireAndForget :: IO () -> Effect s
+  RequestWithCallback :: IO a -> Maybe Int -> Callback s a -> Effect s
 
 instance Monad (Poke s) where
   return x = Poke (return x)
@@ -55,25 +59,37 @@ update path f = do
   let s' = pathUpdate path f s
   Poke (put s')
 
+updateMaybe :: Path s a -> (a -> Maybe a) -> Poke s ()
+updateMaybe path f = do
+  s <- Poke get
+  case pathGet path s of
+    Nothing -> return ()
+    Just x -> case f x of
+      Nothing -> return ()
+      Just x' -> do
+        let s' = pathUpdate path (const x') s
+        addDep (pathRep path)
+        Poke (put s')
+
 set :: Path s a -> a -> Poke s ()
 set path x = update path (const x)
 
 execIO :: IO () -> Poke s ()
-execIO io = Poke (tell ([], [io], []))
+execIO io = Poke (tell ([], [FireAndForget io]))
 
 doRequest :: IO a -> Callback s a -> Poke s ()
-doRequest io cb = Poke (tell ([],[],[Request io cb Nothing]))
+doRequest io cb = Poke (tell ([],[RequestWithCallback io Nothing cb]))
 
 doRequestWithTimeout :: Int -> IO a -> Callback s a -> Poke s ()
-doRequestWithTimeout ms io cb = Poke (tell ([],[],[Request io cb (Just ms)]))
+doRequestWithTimeout ms io cb = Poke (tell ([],[RequestWithCallback io (Just ms) cb]))
 
 doRequestIgnoreFailures :: IO a -> (a -> Poke s ()) -> Poke s ()
-doRequestIgnoreFailures io cb = Poke (tell ([],[],[req])) where
-  req = Request io (ignoreFailures cb) Nothing
+doRequestIgnoreFailures io cb = Poke (tell ([],[req])) where
+  req = RequestWithCallback io Nothing (ignoreFailures cb) 
 
 doRequestWithTimeoutIgnoreFailures :: Int -> IO a -> (a -> Poke s ()) -> Poke s ()
-doRequestWithTimeoutIgnoreFailures ms io cb = Poke (tell ([],[],[req])) where
-  req = Request io (ignoreFailures cb) (Just ms)
+doRequestWithTimeoutIgnoreFailures ms io cb = Poke (tell ([],[req])) where
+  req = RequestWithCallback io (Just ms) (ignoreFailures cb)
 
 ignoreFailures :: (a -> Poke s ()) -> (forall e . Exception e => Either e a -> Poke s ())
 ignoreFailures cb (Right x) = cb x
@@ -83,9 +99,11 @@ abort :: String -> Poke s a
 abort msg = Poke (throwError msg)
 
 addDep :: ByteString -> Poke s ()
-addDep x = Poke (tell ([x],[],[]))
+addDep x = Poke (tell ([x],[]))
 
-runPoke :: s -> Poke s a -> Either String (a, s, [ByteString], [IO ()], [Request s])
+runPoke :: s
+        -> Poke s a
+        -> Either String (a, s, [ByteString], [Effect s])
 runPoke s (Poke act) = case runWriterT (runStateT act s) of
   Left msg -> Left msg
-  Right ((x, s'), (reps,ios,reqs)) -> Right (x, s', reps, ios, reqs)
+  Right ((x, s'), (reps,effs)) -> Right (x, s', reps, effs)

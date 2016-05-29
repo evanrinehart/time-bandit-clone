@@ -8,9 +8,13 @@ data Joystick =
   JPushed JDir [JDir]
     deriving Show
 
+currentDirection :: Joystick -> Maybe JDir
+currentDirection JFree = Nothing
+currentDirection (JPushed d _) = Just d
+
 lean :: JDir -> Joystick -> Joystick
-lean d JFree = JPushed d [d]
-lean d (JPushed _ ds) = JPushed d (ds `union` [d])
+lean d JFree = JPushed d []
+lean d (JPushed d0 ds) = JPushed d (sort (ds `union` [d0]))
 
 release :: JDir -> Joystick -> Joystick
 release _ JFree = JFree

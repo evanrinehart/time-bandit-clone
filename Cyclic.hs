@@ -24,4 +24,12 @@ cyclicRate = Path (w8 0) g s where
   s f (Cyclic x y l z) = Cyclic (f x) y l z
 
 instance Show a => Show (Cyclic a) where
-  show (Cyclic p c l xs) = "Cyclic " ++ show p ++ show c ++ show (take l xs)
+  showsPrec d (Cyclic p c l xs) =
+    showParen (d > 10) $
+    showString "Cyclic " .
+    showsPrec 11 p .
+    showString " " .
+    showsPrec 11 c .
+    showString " " .
+    showsPrec 11 (take l xs)
+
