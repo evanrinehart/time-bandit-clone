@@ -10,6 +10,7 @@ import Barn as B
 import Cyclic
 import Grid as G
 import TileGrid
+import Motion as MO
 
 -- player data structure
 data Player = Player
@@ -56,15 +57,15 @@ releaseJoystick dir = onJS (J.release dir)
 moveControl :: JDir -> Grid Tile -> Player -> Maybe Player
 moveControl jdir grid pl =
   let mo = plMotion pl in
-  let gix = B.gridIx mo in
+  let gix = gridIx mo in
   let Just cell = G.lookup gix grid in
   let fdir = facing mo in
   case nextMoveStrategy (Just jdir) cell fdir of
     StopPlayer -> Nothing
     LaunchPlayer dir' ->
-      if B.isStationary mo then Just $ pl { plMotion = mo' } else Nothing where
-        mo' = B.launch dir' gix' (x,v')
-        x = B.current mo
+      if isStationary mo then Just $ pl { plMotion = mo' } else Nothing where
+        mo' = launch dir' gix' (x,v')
+        x = MO.current mo
         gix' = gixPlusDir dir' gix
         speed = 8
         s = speed

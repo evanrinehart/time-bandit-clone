@@ -2,7 +2,7 @@ module Render where
 
 import Graphics.Gloss
 import Types
-import TimeBandit
+import Model
 import Level
 import Grid as G
 import TileGrid
@@ -11,6 +11,7 @@ import GameOver
 import Player
 import Data.Monoid
 import Barn as B
+import Motion as MO
 
 -- render
 render :: TimeBandit -> Picture
@@ -28,19 +29,19 @@ render m = pic where
   player (Player mo _ _ _ _) = color green (triangle 0.2 mo)
   triangle border mo = shape where
     b = border
-    rot = rotate $ case B.facing mo of
+    rot = rotate $ case facing mo of
       North -> 0
       West -> 270
       South -> 180
       East -> 90
-    (i,j) = ((*gridSize) . realToFrac) $$ (B.current mo)
+    (i,j) = ((*gridSize) . realToFrac) $$ (MO.current mo)
     tr = translate i j . scale gridSize gridSize . rot
     shape = tr (polygon [(0,0.5-b),(b-0.5,b-0.5),(0.5-b,b-0.5)])
   block i j =
     let (i',j') = ((*gridSize) . realToFrac) $$ (i,j) in
     let tr = translate i' j' in
     tr $ rectangleSolid gridSize gridSize
-  (camX, camY) = B.current (plMotion . tbPlayer . ungameover $ m)
+  (camX, camY) = MO.current (plMotion . tbPlayer . ungameover $ m)
   globalShift = translate (gridSize * realToFrac (-camX)) (gridSize * realToFrac (-camY))
   jreport = color white $ text (show (plJoy . tbPlayer . ungameover $ m))
   pic =

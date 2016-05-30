@@ -35,4 +35,4 @@ main = iface >>= \x -> playIO mode black 60 x render input advance where
     --print =<< simDebug iface
     --print =<< ((P.plJoy . TimeBandit.tbPlayer . ungameover . simModel) <$> simDebug iface)
     return iface
-  iface = run (TimeBandit.simulation)
+  iface = TimeBandit.runTimeBandit

@@ -1,6 +1,8 @@
 {-# LANGUAGE DeriveFunctor #-}
 module Zipper where
 
+import Path
+
 data Zipper a = Zipper [a] a [a] deriving Functor
 
 -- showsPrec :: Int -> Zipper a -> String -> String
@@ -37,3 +39,7 @@ prev (Zipper (x:xs) y zs) = Zipper xs x (y:zs)
 
 current :: Zipper a -> a
 current (Zipper _ x _) = x
+
+_current :: Path (Zipper a) a
+_current = Path (w8 0) (Just . current) s where
+  s f (Zipper l x r) = Zipper l (f x) r

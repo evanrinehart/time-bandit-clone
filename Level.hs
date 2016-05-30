@@ -7,13 +7,14 @@ import Barn
 import Types
 import Zipper
 import Player
+import Path
 
 data Level = Level
   { lvlNo :: Int
   , lvlGrid :: Grid Tile
-  , lvlBarn1 :: Barn Player
+  , lvlOtherPlayers :: Barn Player
   , lvlBarn2 :: Barn Monster
-  , lvlBarn3 :: Barn Missile
+  , lvlMissiles :: Barn Missile
   , lvlBarn4 :: Barn Treasure
   , lvlBarn5 :: Barn Smoke
   , lvlGens :: [((Int, Int), GenMonster)]
@@ -38,3 +39,6 @@ level dt (Level i g b1 b2 b3 b4 b5 gens) = updatedLevel where
   b4' = barn (const id) dt b4
   b5' = barn (const id) dt b5
 
+_missiles :: Path Level (Barn Missile)
+_missiles = Path (w8 3) (Just . lvlMissiles) s where
+  s f l = l { lvlMissiles = (f (lvlMissiles l)) }

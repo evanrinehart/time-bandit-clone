@@ -38,7 +38,6 @@ import Control.Category
 -}
 
 data Rule dt s = Rule String (Plan s (dt, Poke s ()))
-data Handler s = forall a . Handler (IO a) [a -> Poke s ()]
 data RuleStatus dt = Inactive Int String String | Staged Int String dt
 
 data Sim dt s = Sim
@@ -47,19 +46,18 @@ data Sim dt s = Sim
   , simIndex :: DepIndex
   , simRules :: IntMap (Rule dt s)
   , simDisp :: Disp dt (Int, Poke s ())
-  , simHandlers :: [Handler s]
   } 
 
 instance (Show dt, Show s) => Show (Sim dt s) where
-  show (Sim x _ ix rules disp _) = "Sim {" ++ (concat . intersperse "," $
+  show (Sim x _ ix rules disp) = "Sim {" ++ (concat . intersperse "," $
     [show x
     ,show ix
     ,show (map (\(Rule name _) -> name) $ IM.elems rules)
     ,show (fmap fst disp)
     ] ) ++ "}"
 
-newSimulation :: (Num dt, Ord dt) => A dt s -> s -> [Rule dt s] -> [Handler s] -> Sim dt s
-newSimulation adv s rules handlers = Sim s adv ix rs disp handlers where
+newSimulation :: (Num dt, Ord dt) => A dt s -> s -> [Rule dt s] -> Sim dt s
+newSimulation adv s rules = Sim s adv ix rs disp where
   numberedRules = zip [0..] rules
   (actions0, ix) = evaluateRules s numberedRules
   rs = IM.fromList numberedRules
@@ -73,15 +71,15 @@ evaluateRules s xs = fmap DI.fromList (go [] [] xs) where
     (Just (dt,poke), reps) -> go ((dt,i,poke):o) (map (,i) reps ++ ix) xs
 
 animate :: (Num dt, Ord dt) => dt -> Sim dt s -> Either (Sim dt s) (Sim dt s, dt, Int, Poke s ())
-animate dt sim@(Sim s adv ix rs disp hs) = case D.advance dt disp of
-  (Nothing, disp') -> Left (Sim (adv dt s) adv ix rs disp' hs)
+animate dt sim@(Sim s adv ix rs disp) = case D.advance dt disp of
+  (Nothing, disp') -> Left (Sim (adv dt s) adv ix rs disp')
   (Just ((i,poke), dt'), disp') -> Right (sim', dt - dt', i, poke) where
-    sim' = Sim (adv dt' s) adv (DI.remove i ix) rs disp' hs
+    sim' = Sim (adv dt' s) adv (DI.remove i ix) rs disp'
 
 applyPoke :: (Num dt, Ord dt) => Poke s () -> Sim dt s -> (Sim dt s, [Effect s])
-applyPoke poke sim@(Sim s adv ix rs disp hs) = case runPoke s poke of
+applyPoke poke sim@(Sim s adv ix rs disp) = case runPoke s poke of
   Left msg -> (sim, [])
-  Right (_,s',reps,effs) -> (Sim s' adv ix''' rs disp'' hs, effs) where
+  Right (_,s',reps,effs) -> (Sim s' adv ix''' rs disp'', effs) where
     affectedRids = foldl' IS.union IS.empty (map (DI.match ix) reps)
     disp' = D.deleteBy ((`IS.member` affectedRids).fst) disp
     ix' = DI.removeMany affectedRids ix
@@ -93,12 +91,12 @@ applyPoke poke sim@(Sim s adv ix rs disp hs) = case runPoke s poke of
     disp'' = foldl' (\d (dt,i,poke) -> D.insert dt (i,poke) d) disp' newTasks
 
 evalRule :: (Num dt, Ord dt) => Int -> Sim dt s -> Sim dt s
-evalRule i (Sim s adv ix rs disp hs) = case IM.lookup i rs of
+evalRule i (Sim s adv ix rs disp) = case IM.lookup i rs of
   Nothing -> error ("rule " ++ show i ++ " not found")
   Just (Rule name pl) -> case runPlan s pl of
-    (Nothing, reps) -> Sim s adv ix' rs disp hs where
+    (Nothing, reps) -> Sim s adv ix' rs disp where
       ix' = ix `DI.union` (DI.fromList (map (,i) reps))
-    (Just (dt,poke), reps) -> Sim s adv ix' rs disp' hs where
+    (Just (dt,poke), reps) -> Sim s adv ix' rs disp' where
       ix' = ix `DI.union` (DI.fromList (map (,i) reps))
       disp' = D.insert dt (i,poke) disp
 
@@ -139,14 +137,18 @@ handleInput workers mv poke = modifyMVar_ mv $ \sim -> do
   execEffects workers mv effs
   return sim'
 
+runSim :: (Num dt, Ord dt)
+       => A dt s
+       -> s
+       -> [Rule dt s]
+       -> IO (Interface dt s)
+runSim a s rules = run (newSimulation a s rules)
+
 run :: (Num dt, Ord dt) => Sim dt s -> IO (Interface dt s)
 run sim = iface where
   iface = do
     mv <- newMVar sim 
     workers <- newWorkers
-    forM_ (simHandlers sim) $ \(Handler io hs) -> do
-      forM_ hs $ \h -> do
-        spawnInputHandler "(untitled)" workers io (handleInput workers mv . h)
     return $ Interface
       (advance mv workers)
       (image mv)

@@ -3,7 +3,6 @@ module Controller where
 import Prelude hiding ((.),id)
 import Control.Category
 import Poke
-import TimeBandit
 import Graphics.Gloss.Interface.IO.Game
 import Joystick
 import Player
@@ -11,6 +10,10 @@ import Zipper as Z
 import GameOver
 import Level
 import Viewing
+import Model
+import Barn
+
+type Poke' = Poke TimeBandit ()
 
 -- controller
 controller :: Event -> Poke TimeBandit ()
@@ -23,19 +26,29 @@ controller e = case e of
   EventKey (Char 'a') Up _ _   -> playerRelease' JLeft
   EventKey (Char 's') Up _ _   -> playerRelease' JDown
   EventKey (Char 'd') Up _ _   -> playerRelease' JRight
+  EventKey (Char 'j') Down _ _ -> playerFire'
+  EventKey (Char 'j') Up _ _   -> playerUnfire'
   _ -> return ()
 
-playerControl' = playerControl ppath zlpath
-playerRelease' = playerRelease ppath
+playerControl' = playerControl _ppath _zlpath
+playerRelease' = playerRelease _ppath
+playerFire'    = playerFire _ppath _mslpath
+playerUnfire'  = playerUnfire _ppath
 
-playerControl :: PathTo Player
-              -> PathTo (Zipper Level)
-              -> JDir
-              -> Poke TimeBandit ()
+playerControl :: PathTo Player -> PathTo (Zipper Level) -> JDir -> Poke'
 playerControl ppath zlpath dir = do
   grid <- (lvlGrid . Z.current) <$> view zlpath
   update ppath (pressJoystick dir)
   updateMaybe ppath (moveControl dir grid)
 
+playerRelease :: PathTo Player -> JDir -> Poke'
 playerRelease ppath dir = do
   update ppath (releaseJoystick dir)
+
+playerFire :: PathTo Player -> PathTo (Barn Missile) -> Poke'
+playerFire player missiles = do
+  return ()
+
+playerUnfire :: PathTo Player -> Poke'
+playerUnfire player = do
+  return ()
