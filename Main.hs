@@ -15,6 +15,8 @@ import qualified Render as TimeBandit
 
 import Player as P
 import GameOver
+import Level
+import Model
 
 screenW = 640
 screenH = 480
@@ -32,7 +34,7 @@ main = iface >>= \x -> playIO mode black 60 x render input advance where
     return iface
   advance dt iface = do
     simWait iface (realToFrac dt)
-    --print =<< simDebug iface
-    --print =<< ((P.plJoy . TimeBandit.tbPlayer . ungameover . simModel) <$> simDebug iface)
+--    print =<< simModel <$> simDebug iface
+    --print =<< ((lvlMissiles . currentLevel . tbLvls . ungameover . simModel) <$> simDebug iface)
     return iface
   iface = TimeBandit.runTimeBandit

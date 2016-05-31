@@ -44,17 +44,17 @@ pathRep (Path bs _ _) = bs
 unit :: Path () ()
 unit = Path (w8 0) Just (const id)
 
-first :: Path (a, b) a
-first = Path (w8 0) (Just . fst) (\f (x,y) -> (f x, y))
+_first :: Path (a, b) a
+_first = Path (w8 0) (Just . fst) (\f (x,y) -> (f x, y))
 
-second :: Path (a, b) b
-second = Path (w8 1) (Just . snd) (\f (x,y) -> (x, f y))
+_second :: Path (a, b) b
+_second = Path (w8 1) (Just . snd) (\f (x,y) -> (x, f y))
 
 mkey :: (Enum k, Ord k) => k -> Path (Map k a) a
 mkey k = Path (w64 . fromIntegral . fromEnum $ k) (M.lookup k) (\f -> M.adjust f k)
 
-imkey :: IM.Key -> Path (IntMap a) a
-imkey k = Path (w64 . fromIntegral . fromEnum $ k) (IM.lookup k) (\f -> IM.adjust f k)
+_imkey :: IM.Key -> Path (IntMap a) a
+_imkey k = Path (w64 . fromIntegral . fromEnum $ k) (IM.lookup k) (\f -> IM.adjust f k)
 
 left :: Path (Either a b) a
 left = Path (w8 0) g p where

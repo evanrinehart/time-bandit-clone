@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 module Level where
 
+import Data.IntMap
 import Grid as G
 import TileGrid
 import Barn
@@ -8,7 +9,13 @@ import Types
 import Zipper
 import Player
 import Path
+import Missile
 
+type Levels = (Int, IntMap Level)
+
+currentLevel (k, im) = im ! k
+
+type LevelNo = Int
 data Level = Level
   { lvlNo :: Int
   , lvlGrid :: Grid Tile
@@ -22,7 +29,6 @@ data Level = Level
   
 type Vel = R2
 data Monster = Monster deriving Show
-data Missile = Missile deriving Show
 data Treasure = Treasure deriving Show
 data Smoke = Smoke deriving Show
 
@@ -30,15 +36,22 @@ newtype GenMonster = GenMonster { genMonster :: Vel -> Monster }
 instance Show GenMonster where
   show _ = "<Vel -> Monster>"
 
+
 level :: Anim Level
 level dt (Level i g b1 b2 b3 b4 b5 gens) = updatedLevel where
   updatedLevel = Level i g b1' b2' b3' b4' b5' gens
   b1' = barn (const id) dt b1
   b2' = barn (const id) dt b2
-  b3' = barn (const id) dt b3
+  b3' = barn missile dt b3
   b4' = barn (const id) dt b4
   b5' = barn (const id) dt b5
 
-_missiles :: Path Level (Barn Missile)
-_missiles = Path (w8 3) (Just . lvlMissiles) s where
+_lvlGrid :: Path Level (Grid Tile)
+_lvlGrid = Path (w8 1) (Just . lvlGrid) s where
+  s f l = l { lvlGrid = (f (lvlGrid l)) }
+
+_lvlMissiles :: Path Level (Barn Missile)
+_lvlMissiles = Path (w8 3) (Just . lvlMissiles) s where
   s f l = l { lvlMissiles = (f (lvlMissiles l)) }
+
+

@@ -13,6 +13,13 @@ current :: Motion -> R2
 current (Motion (x,_) _ _ _ _) = x
 current (Stationary (x,y) _) = (realToFrac x, realToFrac y)
 
+currentVel :: Motion -> R2
+currentVel (Motion (_,v) _ _ _ _) = v
+currentVel (Stationary _ _) = (0,0)
+
+currentSpeed :: Motion -> R
+currentSpeed = norm . currentVel
+
 facing :: Motion -> Dir
 facing (Stationary _ d) = d
 facing (Motion _ _ _ _ d) = d
@@ -28,8 +35,8 @@ isStationary :: Motion -> Bool
 isStationary (Stationary _ _) = True
 isStationary _ = False
 
-stopMotion :: Motion -> Motion
-stopMotion (Motion xv paths xv' gix d) = Stationary gix d
+stop :: Motion -> Motion
+stop (Motion xv paths xv' gix d) = Stationary gix d
 
 --norm (x,y) = sqrt (x*x + y*y)
 diff (a,b) (c,d) = (a-c,b-d)
@@ -52,3 +59,10 @@ timeUntilArrival (Motion (x,v) _ _ gix _) =
   Just $ norm (x' .-. x) / norm v where
     x' = realToFrac $$ gix
 timeUntilArrival _ = Nothing
+
+motionPlus :: R2 -> Motion -> Motion
+motionPlus deltaV (Stationary ix d) = Motion (x,deltaV) [] (x,deltaV) ix d where
+  x = realToFrac $$ ix
+motionPlus deltaV (Motion (x,v) _ _ ix d) = Motion (x,v') [] (x,v') ix d where
+  v' = v .+. deltaV
+

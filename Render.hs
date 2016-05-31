@@ -16,8 +16,8 @@ import Motion as MO
 -- render
 render :: TimeBandit -> Picture
 render m = pic where
-  grid = lvlGrid . Z.current . tbLvls . ungameover $ m
-  gridSize = 25
+  grid = lvlGrid . currentLevel . tbLvls . ungameover $ m
+  gridSize = 30
   tileColor t = case t of
     Normal -> makeColor 0 0.25 0 1.0
     Wall -> black
@@ -37,6 +37,17 @@ render m = pic where
     (i,j) = ((*gridSize) . realToFrac) $$ (MO.current mo)
     tr = translate i j . scale gridSize gridSize . rot
     shape = tr (polygon [(0,0.5-b),(b-0.5,b-0.5),(0.5-b,b-0.5)])
+  narrowTriangle mo = shape where
+    b1 = 0.25
+    b2 = 0.4
+    rot = rotate $ case facing mo of
+      North -> 0
+      West -> 270
+      South -> 180
+      East -> 90
+    (i,j) = ((*gridSize) . realToFrac) $$ (MO.current mo)
+    tr = translate i j . scale gridSize gridSize . rot
+    shape = tr (polygon [(0,0.5-b1),(b2-0.5,b1-0.5),(0.5-b2,b1-0.5)])
   block i j =
     let (i',j') = ((*gridSize) . realToFrac) $$ (i,j) in
     let tr = translate i' j' in
@@ -44,8 +55,19 @@ render m = pic where
   (camX, camY) = MO.current (plMotion . tbPlayer . ungameover $ m)
   globalShift = translate (gridSize * realToFrac (-camX)) (gridSize * realToFrac (-camY))
   jreport = color white $ text (show (plJoy . tbPlayer . ungameover $ m))
+  missile mo = color yellow (narrowTriangle mo)
+  missiles = 
+    mconcat . 
+    map missile .
+    map elemMotion .
+    B.toList .
+    lvlMissiles .
+    currentLevel .
+    tbLvls .
+    ungameover $
+    m
   pic =
-    globalShift (wholeGrid <> player (tbPlayer . ungameover $ m)) <>
+    globalShift (wholeGrid <> player (tbPlayer . ungameover $ m) <> missiles) <>
     translate (-300) (-200) (scale 0.2 0.2 jreport)
 
 {-

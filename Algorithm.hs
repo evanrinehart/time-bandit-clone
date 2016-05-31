@@ -37,7 +37,7 @@ import Control.Category
   5. go to step 0, except eval only the interrupted rules
 -}
 
-data Rule dt s = Rule String (Plan s (dt, Poke s ()))
+type Rule dt s = Plan s (dt, Poke s ())
 data RuleStatus dt = Inactive Int String String | Staged Int String dt
 
 data Sim dt s = Sim
@@ -52,7 +52,7 @@ instance (Show dt, Show s) => Show (Sim dt s) where
   show (Sim x _ ix rules disp) = "Sim {" ++ (concat . intersperse "," $
     [show x
     ,show ix
-    ,show (map (\(Rule name _) -> name) $ IM.elems rules)
+    ,show (map (const "<rule>") (IM.elems rules))
     ,show (fmap fst disp)
     ] ) ++ "}"
 
@@ -66,7 +66,7 @@ newSimulation adv s rules = Sim s adv ix rs disp where
 evaluateRules :: s -> [(Int, Rule dt s)] -> ([(dt, Int, Poke s ())], DepIndex)
 evaluateRules s xs = fmap DI.fromList (go [] [] xs) where
   go o ix [] = (o, ix)
-  go o ix ((i,Rule name pl):xs) = case runPlan s pl of
+  go o ix ((i,pl):xs) = case runPlan s pl of
     (Nothing, reps) -> go o (map (,i) reps ++ ix) xs
     (Just (dt,poke), reps) -> go ((dt,i,poke):o) (map (,i) reps ++ ix) xs
 
@@ -93,7 +93,7 @@ applyPoke poke sim@(Sim s adv ix rs disp) = case runPoke s poke of
 evalRule :: (Num dt, Ord dt) => Int -> Sim dt s -> Sim dt s
 evalRule i (Sim s adv ix rs disp) = case IM.lookup i rs of
   Nothing -> error ("rule " ++ show i ++ " not found")
-  Just (Rule name pl) -> case runPlan s pl of
+  Just pl -> case runPlan s pl of
     (Nothing, reps) -> Sim s adv ix' rs disp where
       ix' = ix `DI.union` (DI.fromList (map (,i) reps))
     (Just (dt,poke), reps) -> Sim s adv ix' rs disp' where
@@ -178,28 +178,6 @@ execEffects _ _ effs = forM_ effs $ \case
   FireAndForget io -> io
   RequestWithCallback io mtime cb -> do
     return ()
-
-planToLater_ :: Poke s () -> dt -> Plan s (dt, Poke s ())
-planToLater_ poke dt = return (dt, poke)
-
-planToNow_ :: Num dt => Poke s () -> Plan s (dt, Poke s ())
-planToNow_ poke = return (0, poke)
-
-require :: Path s Bool -> Plan s ()
-require p = do
-  b <- view p
-  when b (fail "requirement failed")
-
-requireThat :: (a -> Bool) -> Path s a -> Plan s ()
-requireThat f p = do
-  x <- view p
-  when (f x) (fail "requirement failed")
-
-planToWait :: dt -> Plan s (dt, Poke s ())
-planToWait dt = return (dt, return ())
-
-planTo_ :: dt -> Poke s () -> Plan s (dt, Poke s ())
-planTo_ dt poke = return (dt, poke)
 
 plan :: dt -> Poke s () -> Plan s (dt, Poke s ())
 plan dt poke = return (dt, poke)

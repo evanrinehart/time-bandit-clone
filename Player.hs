@@ -1,9 +1,13 @@
 {-# LANGUAGE MultiWayIf #-}
 module Player where
 
+import Prelude hiding ((.),id)
+import Control.Category
+import Path
+import Viewing
+
 import Types
 import Animation
-import Path
 import Cooldown
 import Joystick as J
 import Barn as B
@@ -25,9 +29,17 @@ _plMotion :: Path Player Motion
 _plMotion = Path (w8 0) (Just . plMotion) s where
   s f (Player u v w x y) = Player (f u) v w x y
 
+_plGun :: Path Player Cooldown
+_plGun = Path (w8 2) (Just . plGun) s where
+  s f (Player u v w x y) = Player u v (f w) x y
+
+_plFire :: Path Player Active
+_plFire = Path (w8 3) (Just . plFire) s where
+  s f (Player u v w x y) = Player u v w (f x) y
+
 -- default player builder
 mkPlayer :: GridIx -> Player
-mkPlayer gix@(i,j) = Player mo walk Ready InActive JFree where
+mkPlayer gix@(i,j) = Player mo walk Ready Inactive JFree where
   mo = Stationary gix South
   walk = mkCyclic 0.2 [0..3]
 
@@ -88,38 +100,6 @@ nextMoveStrategy mjdir cell facingDir = case mjdir of
        | dirOpen rightSide  -> LaunchPlayer rightSide
        | otherwise          -> StopPlayer
 
-cellInDirection :: JDir -> Grid a -> GridIx -> Maybe (Cell a)
-cellInDirection dir grid gix = G.lookup (gixPlusDir (jsdirToDir dir) gix) grid
-
-isWall :: Cell Tile -> Bool
-isWall (Cell Wall _ _ _ _) = True
-isWall _ = False
-
-isDoor :: Cell Tile -> Bool
-isDoor (Cell Door _ _ _ _) = True
-isDoor _ = False
-
-
-jsdirToDir d = case d of
-  JUp    -> North
-  JRight -> East
-  JDown  -> South
-  JLeft  -> West
-
-rightHandSide :: Dir -> Dir
-rightHandSide d = case d of
-  North -> East
-  East  -> South
-  South -> West
-  West  -> North
-
-leftHandSide :: Dir -> Dir
-leftHandSide d = case d of
-  North -> West
-  West  -> South
-  South -> East
-  East  -> North
-
 -- player rules
 -- - hold fire while standing
 -- - hold fire while running
@@ -131,11 +111,4 @@ leftHandSide d = case d of
 -- - collide with treasure
 -- - collide with monster
 -- - collide with enemy missile
-
-
-
-
-
-
-
 

@@ -4,6 +4,7 @@ import Data.Maybe
 
 import Types
 import Grid as G
+import Joystick as J
 
 data Tile =
   Normal |
@@ -49,4 +50,35 @@ readRaw rows = answer where
   answer = G.fromList width height cells
 
 exampleGrid = readRaw rawData
-  
+
+isWall :: Cell Tile -> Bool
+isWall (Cell Wall _ _ _ _) = True
+isWall _ = False
+
+isDoor :: Cell Tile -> Bool
+isDoor (Cell Door _ _ _ _) = True
+isDoor _ = False
+
+cellInDirection :: JDir -> Grid a -> GridIx -> Maybe (Cell a)
+cellInDirection dir grid gix = G.lookup (gixPlusDir (jsdirToDir dir) gix) grid
+
+jsdirToDir d = case d of
+  JUp    -> North
+  JRight -> East
+  JDown  -> South
+  JLeft  -> West
+
+rightHandSide :: Dir -> Dir
+rightHandSide d = case d of
+  North -> East
+  East  -> South
+  South -> West
+  West  -> North
+
+leftHandSide :: Dir -> Dir
+leftHandSide d = case d of
+  North -> West
+  West  -> South
+  South -> East
+  East  -> North
+
