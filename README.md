@@ -1,4 +1,4 @@
-=Time Bandit Clone
+#Time Bandit Clone
 
 Exists to figure out experimental models for functional interactive programming.
 
