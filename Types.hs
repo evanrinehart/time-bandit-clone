@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 module Types where
 
 import Animation
@@ -11,6 +12,9 @@ type Time = Delta
 
 data Active = Active | Inactive deriving Show
 
+seq2 :: (a, b) -> (a, b)
+seq2 (!x,!y) = (x,y)
+
 getAngle :: R2 -> R2 -> R
 getAngle u v | norm u == 0 || norm v == 0 = 0
              | otherwise =
@@ -20,10 +24,19 @@ getAngle u v | norm u == 0 || norm v == 0 = 0
   let beta  = asin (x1*y2 - x2*y1) in
   if signum beta == 0 then alpha else alpha * signum beta
 
-(a,b) .+. (c,d) = (a+c, b+d)
+(a,b) .+. (c,d) =
+  let !u = a+c in
+  let !v = b+d in
+  (u,v)
 (a,b) .-. (c,d) = (a-c, b-d)
-r *. (a,b) = (r*a, r*b)
-f $$ (x,y) = (f x, f y)
+r *. (a,b) =
+  let u = r*a in
+  let v = r*b in
+  seq u (seq v (u,v))
+f $$ (x,y) =
+  let u = f x in
+  let v = f y in
+  seq u (seq v (u,v))
 
 dot :: R2 -> R2 -> R
 dot (a,b) (c,d) = a*c + b*d

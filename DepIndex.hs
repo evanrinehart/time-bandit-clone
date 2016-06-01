@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 module DepIndex where
 
 import Data.List hiding (union)
@@ -17,14 +18,14 @@ empty :: DepIndex
 empty = DepIndex (T.empty)
 
 singleton :: ByteString -> Int -> DepIndex
-singleton k i = DepIndex (T.singleton k (S.singleton i))
+singleton k !i = DepIndex (T.singleton k (S.singleton i))
 
 fromList :: [(ByteString, Int)] -> DepIndex
 fromList = foldl' f empty . map (\(x,y) -> (x,S.singleton y)) where
   f tr (k,xs) = append k xs tr
 
 append :: ByteString -> IntSet -> DepIndex -> DepIndex
-append k xs = onTrie (T.alterBy f k xs) where
+append !k xs = onTrie (T.alterBy f k xs) where
   f _ xs Nothing = Just xs
   f _ xs (Just ys) = Just (S.union xs ys)
 

@@ -1,4 +1,5 @@
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE BangPatterns #-}
 module Player where
 
 import Prelude hiding ((.),id)
@@ -18,9 +19,9 @@ import Motion as MO
 
 -- player data structure
 data Player = Player
-  { plMotion  :: Motion
-  , plWalking :: Cyclic Int
-  , plGun     :: Cooldown
+  { plMotion  :: !Motion
+  , plWalking :: !(Cyclic Int)
+  , plGun     :: !Cooldown
   , plFire    :: Active
   , plJoy     :: Joystick
   } deriving Show

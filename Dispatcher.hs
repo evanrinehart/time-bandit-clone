@@ -11,7 +11,7 @@ import qualified Prelude as P (filter)
 -- the next command, and cancel some event by ruleId.
 
 
-data Disp t a = Disp t [(t, a)] deriving (Show, Functor)
+data Disp t a = Disp !t [(t, a)] deriving (Show, Functor)
 
 empty :: t -> Disp t a
 empty t0 = Disp t0 []

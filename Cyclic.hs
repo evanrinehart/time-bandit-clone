@@ -1,10 +1,11 @@
+{-# LANGUAGE BangPatterns #-}
 module Cyclic where
 
 import Data.Fixed
 import Animation
 import Path
 
-data Cyclic a = Cyclic Pico Pico Int [a]
+data Cyclic a = Cyclic !Pico !Pico !Int ![a]
 
 mkCyclic :: Pico -> [a] -> Cyclic a
 mkCyclic p [] = error "empty cyclic animation"
@@ -15,7 +16,7 @@ uncyclic (Cyclic _ _ _ (x:xs)) = x
 
 cyclic :: A Pico (Cyclic a)
 cyclic dt (Cyclic p c len xs) = Cyclic p c' len xs' where
-  (n, c') = divMod' (c + dt) p
+  (n, !c') = divMod' (c + dt) p
   xs' = drop n xs
 
 cyclicRate :: Path (Cyclic a) Pico

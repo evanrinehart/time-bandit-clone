@@ -1,7 +1,8 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE BangPatterns #-}
 module Level where
 
-import Data.IntMap
+import Data.IntMap.Strict
 import Grid as G
 import TileGrid
 import Barn
@@ -40,11 +41,11 @@ instance Show GenMonster where
 level :: Anim Level
 level dt (Level i g b1 b2 b3 b4 b5 gens) = updatedLevel where
   updatedLevel = Level i g b1' b2' b3' b4' b5' gens
-  b1' = barn (const id) dt b1
-  b2' = barn (const id) dt b2
-  b3' = barn missile dt b3
-  b4' = barn (const id) dt b4
-  b5' = barn (const id) dt b5
+  !b1' = barn (const id) dt b1
+  !b2' = barn (const id) dt b2
+  !b3' = barn missile dt b3
+  !b4' = barn (const id) dt b4
+  !b5' = barn (const id) dt b5
 
 _lvlGrid :: Path Level (Grid Tile)
 _lvlGrid = Path (w8 1) (Just . lvlGrid) s where

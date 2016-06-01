@@ -4,7 +4,7 @@ module GameOver where
 import Animation
 import Path
 
-data GameOver a = GameOver a | Playing a deriving (Functor, Show)
+data GameOver a = GameOver !a | Playing !a deriving (Functor, Show)
 
 ungameover :: GameOver a -> a
 ungameover (GameOver x) = x

@@ -2,6 +2,7 @@ module Model where
 
 import Prelude hiding ((.),id)
 import Control.Category
+import Data.IntMap.Strict (IntMap)
 import Path
 import GameOver
 import Zipper
@@ -11,10 +12,10 @@ import Player
 type PathTo = Path TimeBandit
 type TimeBandit = GameOver TimeBandit'
 data TimeBandit' = TimeBandit'
-  { tbLvls :: Levels
-  , tbPlayer :: Player
-  , tbScore :: Int
-  , tbHP :: Int
+  { tbLvls :: !Levels
+  , tbPlayer :: !Player
+  , tbScore :: !Int
+  , tbHP :: !Int
   } deriving Show
 
 _ppath = _playing >>> _tbPlayer

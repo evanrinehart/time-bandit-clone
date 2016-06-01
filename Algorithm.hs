@@ -2,6 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE BangPatterns #-}
 module Algorithm where
 
 import Prelude hiding ((.),id)
@@ -11,6 +12,7 @@ import Data.List (intersperse, foldl')
 import qualified Data.IntSet as IS
 import Data.IntSet (IntSet)
 import Control.Concurrent
+import Control.Exception
 import Data.Fixed
 import Control.Monad (forM_)
 
@@ -41,9 +43,9 @@ type Rule dt s = Plan s (dt, Poke s ())
 data RuleStatus dt = Inactive Int String String | Staged Int String dt
 
 data Sim dt s = Sim
-  { simModel :: s
+  { simModel :: !s
   , simAnimation :: A dt s
-  , simIndex :: DepIndex
+  , simIndex :: !DepIndex
   , simRules :: IntMap (Rule dt s)
   , simDisp :: Disp dt (Int, Poke s ())
   } 
@@ -157,7 +159,7 @@ run sim = iface where
       (debug mv)
   advance mv workers dt = modifyMVar_ mv (go dt) where
     go dt sim = case animate dt sim of
-      Left sim' -> return sim'
+      Left sim' -> evaluate sim'
       Right (sim', dt', ruleId, poke) -> do
         let (sim'', effs) = applyPoke poke sim'
         let sim''' = evalRule ruleId sim''
@@ -172,6 +174,7 @@ run sim = iface where
     takeMVar mv
     clearWorkers workers
   debug mv = withMVar mv return
+  --debug mv = undefined
 
 execEffects :: Workers -> MVar (Sim dt s) -> [Effect s] -> IO ()
 execEffects _ _ effs = forM_ effs $ \case
@@ -180,4 +183,4 @@ execEffects _ _ effs = forM_ effs $ \case
     return ()
 
 plan :: dt -> Poke s () -> Plan s (dt, Poke s ())
-plan dt poke = return (dt, poke)
+plan !dt poke = return (dt, poke)

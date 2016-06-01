@@ -3,13 +3,13 @@
 module Grid where
 
 import Types
-import Data.IntMap as IM hiding (lookup)
-import qualified Data.IntMap as IM (lookup)
+import Data.IntMap.Strict as IM hiding (lookup)
+import qualified Data.IntMap.Strict as IM (lookup)
 import Data.Maybe
 
 data Grid a = Grid
-  { gridW :: Int
-  , gridH :: Int
+  { gridW :: !Int
+  , gridH :: !Int
   , gridCells :: IntMap a
   } deriving (Show, Functor)
 
