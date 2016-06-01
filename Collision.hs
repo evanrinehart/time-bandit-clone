@@ -12,6 +12,10 @@ import Types
 import Motion as MO
 import LinePoint
 
+import Animation
+import Path
+import Facade
+
 -- a collision index for predicting time of collision between two classes
 
 data ColIndex t a b = MkCix
@@ -20,6 +24,16 @@ data ColIndex t a b = MkCix
   , colIxMin :: Maybe (t,a,b)
   , colIxClk :: t
   } deriving Show
+
+-- the collision index animates like a clock
+-- in the future we can reset all times in the index periodically
+colIndex :: Num t => A t (ColIndex t a b)
+colIndex dt ix = ix { colIxClk = colIxClk ix + dt }
+
+colIxFacade :: (Eq t, Eq a, Eq b, Num t)
+            => ColIndex t a b -> Facade (ColIndex t a b) (Maybe (t,a,b))
+colIxFacade ix = Facade v (==) ix where
+  v (MkCix _ _ xmin clk) = fmap (\(t,a,b) -> (t - clk, a, b)) xmin
 
 targetSize = 0.75
 

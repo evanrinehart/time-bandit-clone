@@ -101,6 +101,13 @@ abort msg = Poke (throwError msg)
 addDep :: ByteString -> Poke s ()
 addDep x = Poke (tell ([x],[]))
 
+-- introduce an artificial modification
+touch :: Path s a -> Poke s ()
+touch p = do
+  let bs = pathRep p
+  addDep bs
+  return ()
+
 runPoke :: s
         -> Poke s a
         -> Either String (a, s, [ByteString], [Effect s])
