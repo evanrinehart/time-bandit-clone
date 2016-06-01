@@ -50,8 +50,10 @@ module LinePoint where
 -- to do is the make sure all solutions are between t0 and t1 and that the
 -- implied s is between 0 and 1.
 
-type R = Double
-type R2 = (R,R)
+import Types
+
+--type R = Double
+--type R2 = (R,R)
 
 data Problem = Problem
   { _x0 :: R2
@@ -80,11 +82,12 @@ solve (Problem x0 vx a0 va b0 vb t0 t1) = filterSol redact answer where
   c' = p1*u2 - p2*u1
   answer | a' == 0 = OneSolution (-c' / b')
          | otherwise = quadraticFormula a' b' c'
-  redact t = between t0 t1 t && between 0 1 s && extraValidity where
+  redact t = between t0 t1 t && between 0 1 s {- && extraValidity -} where
     s = if u1 == 0 && v1 == 0
           then (-p2 - q2*t)/(u2 + v2*t)
           else (-p1 - q1*t)/(u1 + v1*t)
-    extraValidity = (u1 + v1*t /= 0) && (u2 + v2*t /= 0)
+    --extraValidity = (u1 + v1*t /= 0) && (u2 + v2*t /= 0)
+    --this shouldnt come up unless a=0, in which case division by zero never happened
 
 quadraticFormula :: R -> R -> R -> Solution
 quadraticFormula a b c =
