@@ -5,7 +5,7 @@ import Clock
 import Animation
 
 type MissileType = Int
-data Missile = Missile (Clock Double) MissileType deriving Show
+data Missile = Missile !(Clock Double) !MissileType deriving Show
 
 timeLeft :: Missile -> Double
 timeLeft (Missile (Clock c rate) _) = c/rate

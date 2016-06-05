@@ -36,7 +36,7 @@ main = iface >>= \x -> playIO mode black 60 x render input advance where
         --return ()
     return iface
   advance dt iface = do
-    simWait iface (realToFrac dt)
+    simWait iface (realToFrac (dt/10))
     --print =<< simModel <$> simDebug iface
     --print =<< ((lvlMissiles . currentLevel . tbLvls . ungameover . simModel) <$> simDebug iface)
     return iface

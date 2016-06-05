@@ -4,6 +4,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE BangPatterns #-}
 module Poke where
 
 import Prelude hiding (read)
@@ -11,6 +12,8 @@ import Control.Monad.Writer
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Exception
+import Data.Trie as T
+import Data.Monoid
 
 import Data.ByteString
 import Viewing
@@ -25,7 +28,7 @@ newtype Poke s a =
   deriving Functor
 
 type InnerMonad s = StateT s (WriterT (Output s) (Either String))
-type Output s = ([ByteString], [Effect s])
+type Output s = (Endo (Trie ()), [Effect s])
 type Callback s a = forall e . Exception e => Either e a -> Poke s ()
 
 data Effect s where
@@ -56,7 +59,7 @@ update :: Path s a -> (a -> a) -> Poke s ()
 update path f = do
   addDep (pathRep path)
   s <- Poke get
-  let s' = pathUpdate path f s
+  let !s' = pathUpdate path f s
   Poke (put s')
 
 updateMaybe :: Path s a -> (a -> Maybe a) -> Poke s ()
@@ -67,7 +70,7 @@ updateMaybe path f = do
     Just x -> case f x of
       Nothing -> return ()
       Just x' -> do
-        let s' = pathUpdate path (const x') s
+        let !s' = pathUpdate path (const x') s
         addDep (pathRep path)
         Poke (put s')
 
@@ -75,23 +78,26 @@ set :: Path s a -> a -> Poke s ()
 set path x = update path (const x)
 
 execIO :: IO () -> Poke s ()
-execIO io = Poke (tell ([], [FireAndForget io]))
+execIO io = Poke (tell (mempty, [FireAndForget io]))
 
 doRequest :: IO a -> Callback s a -> Poke s ()
-doRequest io cb = Poke (tell ([],[RequestWithCallback io Nothing cb]))
+doRequest io cb = Poke (tell (mempty,[RequestWithCallback io Nothing cb]))
 
 doRequestWithTimeout :: Int -> IO a -> Callback s a -> Poke s ()
-doRequestWithTimeout ms io cb = Poke (tell ([],[RequestWithCallback io (Just ms) cb]))
+doRequestWithTimeout ms io cb =
+  Poke (tell (mempty,[RequestWithCallback io (Just ms) cb]))
 
 doRequestIgnoreFailures :: IO a -> (a -> Poke s ()) -> Poke s ()
-doRequestIgnoreFailures io cb = Poke (tell ([],[req])) where
+doRequestIgnoreFailures io cb = Poke (tell (mempty,[req])) where
   req = RequestWithCallback io Nothing (ignoreFailures cb) 
 
-doRequestWithTimeoutIgnoreFailures :: Int -> IO a -> (a -> Poke s ()) -> Poke s ()
-doRequestWithTimeoutIgnoreFailures ms io cb = Poke (tell ([],[req])) where
+doRequestWithTimeoutIgnoreFailures ::
+  Int -> IO a -> (a -> Poke s ()) -> Poke s ()
+doRequestWithTimeoutIgnoreFailures ms io cb = Poke (tell (mempty,[req])) where
   req = RequestWithCallback io (Just ms) (ignoreFailures cb)
 
-ignoreFailures :: (a -> Poke s ()) -> (forall e . Exception e => Either e a -> Poke s ())
+ignoreFailures ::
+  (a -> Poke s ()) -> (forall e . Exception e => Either e a -> Poke s ())
 ignoreFailures cb (Right x) = cb x
 ignoreFailures cb _ = return ()
 
@@ -99,18 +105,19 @@ abort :: String -> Poke s a
 abort msg = Poke (throwError msg)
 
 addDep :: ByteString -> Poke s ()
-addDep x = Poke (tell ([x],[]))
+addDep bs = Poke (tell (Endo (T.insert bs ()),[]))
 
 -- introduce an artificial modification
 touch :: Path s a -> Poke s ()
 touch p = do
-  let bs = pathRep p
+  let !bs = pathRep p
   addDep bs
   return ()
 
 runPoke :: s
         -> Poke s a
-        -> Either String (a, s, [ByteString], [Effect s])
+        -> Either String (a, s, Trie (), [Effect s])
 runPoke s (Poke act) = case runWriterT (runStateT act s) of
   Left msg -> Left msg
-  Right ((x, s'), (reps,effs)) -> Right (x, s', reps, effs)
+  Right ((!x, !s'), (mkdeps,effs)) ->
+    Right (x, s', appEndo mkdeps T.empty, effs)

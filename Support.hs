@@ -72,13 +72,13 @@ removeMissile levels lNo k =
 
 whenMissileExpires :: PathTo Levels -> Plan' (Double, LevelNo, Int)
 whenMissileExpires levels = ans where
-  ans = do
-    (_,im) <- view levels
-    required $ IM.foldrWithKey f Nothing im
   f lNo lvl Nothing = B.foldr (g lNo) Nothing (lvlMissiles lvl)
   f lNo lvl accum = B.foldr (g lNo) accum (lvlMissiles lvl)
   g lNo k (Missile (Clock dt _) _) Nothing = Just (dt, lNo, k)
   g lNo k (Missile (Clock dt _) _) r@(Just (dt0, lNo0, k0)) = if dt < dt0
     then Just (dt, lNo, k)
     else r
+  ans = do
+    (_,im) <- view levels
+    required $ IM.foldrWithKey f Nothing im
 

@@ -22,8 +22,8 @@ data Player = Player
   { plMotion  :: !Motion
   , plWalking :: !(Cyclic Int)
   , plGun     :: !Cooldown
-  , plFire    :: Active
-  , plJoy     :: Joystick
+  , plFire    :: !Active
+  , plJoy     :: !Joystick
   } deriving Show
 
 _plMotion :: Path Player Motion

@@ -20,6 +20,13 @@ import Motion
 import qualified Data.IntMap as IM
 import Cooldown
 
+data Control =
+  Lean JDir |
+  Release JDir |
+  PressFire |
+  ReleaseFire
+    deriving Show
+
 -- controller
 controller :: Event -> Poke TimeBandit ()
 controller e = case e of
@@ -59,7 +66,7 @@ playerFire player levels = do
   lvls <- view levels
   setFire player Active
   resetCooldown player
-  when (countMissiles lvls < 10) $ do
+  when (countMissiles lvls < 2) $ do
     playerFireMissile pl lvls
 
 playerUnfire :: PathTo Player -> Poke'

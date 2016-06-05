@@ -15,22 +15,26 @@ import Control.Concurrent
 import Control.Exception
 import Data.Fixed
 import Control.Monad (forM_)
+import Data.Trie as T
+import Data.HashMap.Strict as H
 
-import Dispatcher as D
+import Dispatcher2 as D
+import DepIndex2 as DI
 import Plan
 import Poke
+import Event
+import Port
 import Animation as A
 import Path
 import Viewing
-import DepIndex as DI
 import Workers as W
 
 import Control.Monad (when)
 import Control.Category
 
 {-
-  0. eval all rules, update index and a set of inactive / waiting actions
-  1. wait for next action, user input, or async result
+  0. generate pros from rules, evalute to get initial depindex and dispatcher
+  1. wait for next event
   2. take all actions happening now, and sort them by priority. execute the
      poke actions in order to get an abort or list of paths modified for each
      one.
@@ -39,34 +43,32 @@ import Control.Category
   5. go to step 0, except eval only the interrupted rules
 -}
 
-type Rule dt s = Plan s (dt, Poke s ())
-data RuleStatus dt = Inactive Int String String | Staged Int String dt
+type Rule s dt = Event s dt (Poke s ())
 
 data Sim dt s = Sim
   { simModel :: !s
   , simAnimation :: A dt s
-  , simIndex :: !DepIndex
-  , simRules :: IntMap (Rule dt s)
-  , simDisp :: Disp dt (Int, Poke s ())
+  , simRules :: [Rule s dt]
+  , simPreds :: HashMap PrName (AnyPred dt s)
+  , simDisp :: Disp2 dt Poke s ()
+  , simIndex :: !DepIx2 PrName ByteString
   } 
 
 instance (Show dt, Show s) => Show (Sim dt s) where
   show (Sim x _ ix rules disp) = "Sim {" ++ (concat . intersperse "," $
     [show x
     ,show ix
-    ,show (map (const "<rule>") (IM.elems rules))
+    ,show (map (const "<rule>") rules)
     ,show (fmap fst disp)
     ] ) ++ "}"
 
 newSimulation :: (Num dt, Ord dt) => A dt s -> s -> [Rule dt s] -> Sim dt s
-newSimulation adv s rules = Sim s adv ix rs disp where
-  numberedRules = zip [0..] rules
-  (actions0, ix) = evaluateRules s numberedRules
-  rs = IM.fromList numberedRules
+newSimulation adv s rules = Sim s adv ix rules disp where
+  (actions0, ix) = evaluatePreds s rules
   disp = D.Disp 0 (map (\(dt,i,act) -> (dt,(i,act))) actions0)
 
-evaluateRules :: s -> [(Int, Rule dt s)] -> ([(dt, Int, Poke s ())], DepIndex)
-evaluateRules s xs = fmap DI.fromList (go [] [] xs) where
+evaluatePreds :: s -> [(Int, Rule dt s)] -> ([(dt, Int, Poke s ())], DepIndex)
+evaluatePreds s xs = fmap DI.fromList (go [] [] xs) where
   go o ix [] = (o, ix)
   go o ix ((i,pl):xs) = case runPlan s pl of
     (Nothing, reps) -> go o (map (,i) reps ++ ix) xs
@@ -103,10 +105,10 @@ evalRule i (Sim s adv ix rs disp) = case IM.lookup i rs of
       disp' = D.insert dt (i,poke) disp
 
 data Interface dt s = Interface
-   { simWait :: dt -> IO ()
+   { simWait  :: dt -> IO ()
    , simImage :: forall a . (s -> a) -> IO a
-   , simPoke :: Poke s () -> IO ()
-   , simKill :: IO ()
+   , simWrite :: forall a . Port s a -> a -> IO ()
+   , simKill  :: IO ()
    , simDebug :: IO (Sim dt s)
    }
 
@@ -184,3 +186,6 @@ execEffects _ _ effs = forM_ effs $ \case
 
 plan :: dt -> Poke s () -> Plan s (dt, Poke s ())
 plan !dt poke = return (dt, poke)
+
+immediately :: Num dt => Poke s () -> Plan s (dt, Poke s ())
+immediately poke = plan 0 poke

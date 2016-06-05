@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE MultiWayIf #-}
 module LinePoint where
 
 -- solve the following problem:
@@ -50,10 +52,14 @@ module LinePoint where
 -- to do is the make sure all solutions are between t0 and t1 and that the
 -- implied s is between 0 and 1.
 
-import Types
+import Data.CReal
 
---type R = Double
---type R2 = (R,R)
+--import Types
+import Debug.Trace
+debug lab x = trace (lab ++ ": " ++ show x) x
+
+type R = Double
+type R2 = (R,R)
 
 data Problem = Problem
   { _x0 :: R2
@@ -77,13 +83,15 @@ solve (Problem x0 vx a0 va b0 vb t0 t1) = filterSol redact answer where
   q2 = snd va - snd vx
   u2 = snd b0 - snd a0
   v2 = snd vb - snd va
+  !foo = debug "vars" [("p1",p1),("q1",q1),("u1",u1),("v1",v1),("p2",p2),("q2",q2),("u2",u2),("v2",v2)]
   a' = q1*v2 - q2*v1
   b' = p1*v2 + q1*u2 - p2*v1 - q2*u1
   c' = p1*u2 - p2*u1
+  !bar = debug "vars'" [("a'",a'),("b'",b'),("c'",c')]
   answer | a' == 0 = OneSolution (-c' / b')
          | otherwise = quadraticFormula a' b' c'
   redact t = between t0 t1 t && between 0 1 s {- && extraValidity -} where
-    s = if u1 == 0 && v1 == 0
+    s = debug "s" $ if u1 == 0 && v1 == 0
           then (-p2 - q2*t)/(u2 + v2*t)
           else (-p1 - q1*t)/(u1 + v1*t)
     --extraValidity = (u1 + v1*t /= 0) && (u2 + v2*t /= 0)
@@ -94,13 +102,15 @@ quadraticFormula a b c =
   let twoA = 2*a in
   let minusB = -b in
   let discr = b*b - 4*a*c in
-  if discr < 0
-    then NoSolution
-    else if discr == 0
-      then OneSolution (minusB / twoA)
-      else TwoSolutions
-        ((minusB + sqrt discr)/twoA)
-        ((minusB - sqrt discr)/twoA)
+  if | discr < 0  -> NoSolution
+     | discr == 0 -> OneSolution (minusB / twoA)
+     | b > 0     ->
+         let sol1 = (minusB - sqrt discr)/twoA in
+         TwoSolutions sol1 (c / (a * sol1))
+     | b < 0      ->
+         let sol1 = (minusB + sqrt discr)/twoA in
+         TwoSolutions sol1 (c / (a * sol1))
+     | b == 0    -> TwoSolutions (sqrt (c/a)) (-sqrt (c/a))
 
 filterSol :: (R -> Bool) -> Solution -> Solution
 filterSol f sol = case sol of
@@ -113,7 +123,7 @@ filterSol f sol = case sol of
     _ -> NoSolution
 
 between :: R -> R -> R -> Bool
-between l r x = l <= x && x <= r
+between l r x = l < x && x < r
 
 firstSolution :: Solution -> Maybe R
 firstSolution sol = case sol of

@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Path where
 
 import Prelude hiding ((.), id)
@@ -13,24 +14,26 @@ import Data.IntMap as IM
 import Control.Monad ((<=<))
 
 type Edit s a = (a -> a) -> s -> s
-data Path s a = Path ByteString (s -> Maybe a) (Edit s a)
+data Path s a = Path Bldr (s -> Maybe a) (Edit s a)
+type Bldr = [Word8] -> [Word8]
 
-w8 :: Word8 -> ByteString
-w8 x = BS.singleton x
+w8 :: Word8 -> Bldr
+w8 x = ([x] ++)
 
 byte :: Int -> Word64 -> Word8
 byte i = fromIntegral . (.&. 255) . (`shiftR` (8*i))
 
-w64 :: Word64 -> ByteString
-w64 x = BS.pack
-  [ byte 7 x
-  , byte 6 x
-  , byte 5 x
-  , byte 4 x
-  , byte 3 x
-  , byte 2 x
-  , byte 1 x
-  , byte 0 x ]
+w64 :: Word64 -> Bldr
+w64 x = (bs ++) where
+  bs =
+    [ byte 7 x
+    , byte 6 x
+    , byte 5 x
+    , byte 4 x
+    , byte 3 x
+    , byte 2 x
+    , byte 1 x
+    , byte 0 x ]
 
 pathGet :: Path s a -> s -> Maybe a
 pathGet (Path _ g _) x = g x
@@ -39,7 +42,7 @@ pathUpdate :: Path s a -> (a -> a) -> s -> s
 pathUpdate (Path _ _ e) f x = e f x
 
 pathRep :: Path s a -> ByteString
-pathRep (Path bs _ _) = bs
+pathRep (Path bs _ _) = BS.pack (bs [])
 
 unit :: Path () ()
 unit = Path (w8 0) Just (const id)
@@ -72,7 +75,7 @@ right = Path (w8 1) g p where
 
 instance Category Path where
   id = Path mempty Just (const id)
-  (Path p1 g1 e1) . (Path p2 g2 e2) = Path (p2 <> p1) (g1 <=< g2) (e2 . e1)
+  (Path p1 g1 e1) . (Path p2 g2 e2) = Path (p2 . p1) (g1 <=< g2) (e2 . e1)
 
 class Functor f => Body f where
   getBody :: f a -> a

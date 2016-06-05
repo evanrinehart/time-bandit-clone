@@ -5,6 +5,8 @@ import Animation
 
 type Anim a = A Double a
 
+data V2 a = V2 !a !a deriving (Eq,Ord,Show)
+
 type R = Double
 type R2 = (R,R)
 type Delta = Double
