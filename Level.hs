@@ -37,7 +37,6 @@ newtype GenMonster = GenMonster { genMonster :: Vel -> Monster }
 instance Show GenMonster where
   show _ = "<Vel -> Monster>"
 
-
 level :: Anim Level
 level dt (Level i g b1 b2 b3 b4 b5 gens) = updatedLevel where
   updatedLevel = Level i g b1' b2' b3' b4' b5' gens
@@ -47,12 +46,11 @@ level dt (Level i g b1 b2 b3 b4 b5 gens) = updatedLevel where
   !b4' = barn (const id) dt b4
   !b5' = barn (const id) dt b5
 
-_lvlGrid :: Path Level (Grid Tile)
-_lvlGrid = Path (w8 1) (Just . lvlGrid) s where
+lvlGrid' :: Path Level (Grid Tile)
+lvlGrid' = Path (w8 1) (Just . lvlGrid) s where
   s f l = l { lvlGrid = (f (lvlGrid l)) }
 
-_lvlMissiles :: Path Level (Barn Missile)
-_lvlMissiles = Path (w8 3) (Just . lvlMissiles) s where
+lvlMissiles' :: Path Level (Barn Missile)
+lvlMissiles' = Path (w8 3) (Just . lvlMissiles) s where
   s f l = l { lvlMissiles = (f (lvlMissiles l)) }
-
 

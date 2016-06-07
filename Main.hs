@@ -18,26 +18,33 @@ import GameOver
 import Level
 import Model
 import TileGrid
+import Port
 
 screenW = 640
 screenH = 480
 
-main = iface >>= \x -> playIO mode black 60 x render input advance where
-  mode = (InWindow "Testing" (screenW,screenH) (0,0))
-  render iface = simImage iface TimeBandit.render
---  render iface = return blank
-  input e iface = do
-    case e of
-      EventKey (SpecialKey KeyEsc) _ _ _ -> do
-        simKill iface
-        exitSuccess
-      _ -> do
-        simPoke iface (TimeBandit.controller e)
-        --return ()
-    return iface
-  advance dt iface = do
-    simWait iface (realToFrac (dt/10))
-    --print =<< simModel <$> simDebug iface
-    --print =<< ((lvlMissiles . currentLevel . tbLvls . ungameover . simModel) <$> simDebug iface)
-    return iface
-  iface = TimeBandit.runTimeBandit exampleGrid
+render iface = simRender iface TimeBandit.render
+
+input pA pB e iface = do
+  case e of
+    EventKey (SpecialKey KeyEsc) _ _ _ -> do
+      simKill iface
+      exitSuccess
+    _ -> do
+      (TimeBandit.controller pA pB iface e)
+      --return ()
+  return iface
+
+advance dt iface = do
+  simWait iface (realToFrac dt)
+  --print =<< simModel <$> simDebug iface
+  print =<< simDebug iface
+  --print =<< ((lvlMissiles . currentLevel . tbLvls . ungameover . simModel) <$> simDebug iface)
+  return iface
+
+main = do
+  let mode = (InWindow "Testing" (screenW,screenH) (0,0))
+  pA <- newPort
+  pB <- newPort
+  iface <- TimeBandit.runTimeBandit pA pB exampleGrid
+  playIO mode black 60 iface render (input pA pB) advance

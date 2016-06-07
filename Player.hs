@@ -26,16 +26,16 @@ data Player = Player
   , plJoy     :: !Joystick
   } deriving Show
 
-_plMotion :: Path Player Motion
-_plMotion = Path (w8 0) (Just . plMotion) s where
+plMotion' :: Path Player Motion
+plMotion' = Path (w8 0) (Just . plMotion) s where
   s f (Player u v w x y) = Player (f u) v w x y
 
-_plGun :: Path Player Cooldown
-_plGun = Path (w8 2) (Just . plGun) s where
+plGun' :: Path Player Cooldown
+plGun' = Path (w8 2) (Just . plGun) s where
   s f (Player u v w x y) = Player u v (f w) x y
 
-_plFire :: Path Player Active
-_plFire = Path (w8 3) (Just . plFire) s where
+plFire' :: Path Player Active
+plFire' = Path (w8 3) (Just . plFire) s where
   s f (Player u v w x y) = Player u v w (f x) y
 
 -- default player builder
@@ -48,8 +48,8 @@ mkPlayer gix@(i,j) = Player mo walk Ready Inactive JFree where
 --linear :: R -> Motion -> Motion
 
 -- player animation
-player :: Anim Player
-player dt (Player mo walk gun fire joy) = p where
+playerAni :: Anim Player
+playerAni dt (Player mo walk gun fire joy) = p where
   p = Player mo' walk' gun' fire joy
   mo'   = linear dt mo
   walk' = cyclic (realToFrac dt) walk
@@ -59,7 +59,7 @@ onJS :: (Joystick -> Joystick) -> Player -> Player
 onJS f pl = pl { plJoy = (f (plJoy pl)) }
 
 pressJoystick :: JDir -> Player -> Player
-pressJoystick dir = onJS (J.lean dir)
+pressJoystick dir = onJS (J.push dir)
 
 releaseJoystick :: JDir -> Player -> Player
 releaseJoystick dir = onJS (J.release dir)

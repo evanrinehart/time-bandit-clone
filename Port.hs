@@ -1,22 +1,32 @@
+{-# LANGUAGE BangPatterns #-}
 module Port where
 
-import Control.Concurrent.STM
+import Data.IORef
 import Control.Exception
 import Control.Monad
-import Poke
+import System.IO.Unsafe
+import Unsafe.Coerce
+import System.Mem.StableName
 
-data Port a = Port (TVar Bool) (TVar Int)
+data Port a = Port { portObjectIdentity :: IORef () }
+
+instance Show (Port a) where
+  show _ = "<Port>"
 
 newPort :: IO (Port a)
-newPort = Port <$> newTVarIO False <*> newTVarIO (-1)
+newPort = do
+  ref <- newIORef ()
+  return (Port ref)
 
-activatePort :: Int -> Port a -> IO ()
-activatePort c p@(Port tv1 tv2) = do
-  b <- portIsActive p
-  when b (throwIO (userError "attempting to activate an active port"))
-  atomically $ do
-    writeTVar tv1 True
-    writeTVar tv2 c
-
-portIsActive :: Port a -> IO Bool
-portIsActive (Port tv1 _) = atomically (readTVar tv1)
+-- the justification for this is more shaky than predCoerce. Ports have
+-- object identity so it would be very wrong for this to give a positive
+-- result if the ports are different, same type or not. The port contains
+-- a unique IORef to ensure that ports created with different IO actions
+-- are different objects.
+portCoerce :: Port a -> Port b -> a -> Maybe b
+portCoerce !p1 !p2 x = unsafePerformIO $ do
+  n1 <- makeStableName p1
+  n2 <- makeStableName p2
+  if eqStableName n1 n2
+    then return (Just (unsafeCoerce x))
+    else return Nothing

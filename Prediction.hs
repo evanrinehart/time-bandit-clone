@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE BangPatterns #-}
 module Prediction where
 
 import Data.Map
@@ -11,6 +12,7 @@ import Data.Trie as T
 import Data.HashMap.Strict as H
 import Data.Hashable
 import Unsafe.Coerce
+import System.IO.Unsafe
 
 import Plan
 import Poke
@@ -32,6 +34,13 @@ instance Eq PrName where
 instance Hashable PrName where
    hashWithSalt salt (PrName n) = hashWithSalt salt (hashStableName n)
 
+instance Show PrName where
+  show _ = "<Pred>"
+
+dummyPred :: Pred Double s Char
+dummyPred = do
+  return (InExactly 3.14 'z')
+
 -- run a predictor on a state.
 runPredictor :: Pred dt s a -> s -> (Prediction dt a, Trie ())
 runPredictor pred s = (result, deps) where
@@ -40,9 +49,10 @@ runPredictor pred s = (result, deps) where
     Nothing -> WontEver
     Just r -> r
 
--- if they have the same stable name, they have the same type
-predCoerce :: Pred dt s a -> Pred dt s b -> a -> IO (Maybe b)
-predCoerce p1 p2 x = do
+-- if they have the same stable name, they have the same result type
+-- so you can safely do a type cast.
+predCoerce :: Pred dt s a -> Pred dt s b -> a -> Maybe b
+predCoerce !p1 !p2 x = unsafePerformIO $ do
   n1 <- makeStableName p1
   n2 <- makeStableName p2
   if eqStableName n1 n2

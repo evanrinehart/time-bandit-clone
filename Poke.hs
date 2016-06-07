@@ -116,8 +116,8 @@ touch p = do
 
 runPoke :: s
         -> Poke s a
-        -> Either String (a, s, Trie (), [Effect s])
+        -> Maybe (a, s, Trie (), [Effect s])
 runPoke s (Poke act) = case runWriterT (runStateT act s) of
-  Left msg -> Left msg
+  Left _ -> Nothing
   Right ((!x, !s'), (mkdeps,effs)) ->
-    Right (x, s', appEndo mkdeps T.empty, effs)
+    Just (x, s', appEndo mkdeps T.empty, effs)

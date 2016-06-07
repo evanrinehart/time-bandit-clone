@@ -8,7 +8,9 @@ import GameOver
 import Zipper
 import Level
 import Player
+import Algorithm
 
+type Iface = Interface Double TimeBandit
 type PathTo = Path TimeBandit
 type TimeBandit = GameOver TimeBandit'
 data TimeBandit' = TimeBandit'
@@ -18,16 +20,13 @@ data TimeBandit' = TimeBandit'
   , tbHP :: !Int
   } deriving Show
 
-_ppath = _playing >>> _tbPlayer
-_lvlspath = _playing >>> _tbLvls
-
-_tbLvls :: Path TimeBandit' Levels
-_tbLvls = Path (w8 0) g s where
+tbLvls' :: Path TimeBandit' Levels
+tbLvls' = Path (w8 0) g s where
   g = Just . tbLvls
   s f tb = tb { tbLvls = f (tbLvls tb) }
 
-_tbPlayer :: Path TimeBandit' Player
-_tbPlayer = Path (w8 1) g s where
+tbPlayer' :: Path TimeBandit' Player
+tbPlayer' = Path (w8 1) g s where
   g = Just . tbPlayer
   s f tb = tb { tbPlayer = f (tbPlayer tb) }
 

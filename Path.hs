@@ -44,34 +44,34 @@ pathUpdate (Path _ _ e) f x = e f x
 pathRep :: Path s a -> ByteString
 pathRep (Path bs _ _) = BS.pack (bs [])
 
-unit :: Path () ()
-unit = Path (w8 0) Just (const id)
+unit' :: Path () ()
+unit' = Path (w8 0) Just (const id)
 
-_first :: Path (a, b) a
-_first = Path (w8 0) (Just . fst) (\f (x,y) -> (f x, y))
+class LeftRight f where
+  left :: Path (f a b) a
+  right :: Path (f a b) b
 
-_second :: Path (a, b) b
-_second = Path (w8 1) (Just . snd) (\f (x,y) -> (x, f y))
+instance LeftRight (,) where
+  left = Path (w8 0) (Just . fst) (\f (x,y) -> (f x, y))
+  right = Path (w8 1) (Just . snd) (\f (x,y) -> (x, f y))
 
 mkey :: (Enum k, Ord k) => k -> Path (Map k a) a
 mkey k = Path (w64 . fromIntegral . fromEnum $ k) (M.lookup k) (\f -> M.adjust f k)
 
-_imkey :: IM.Key -> Path (IntMap a) a
-_imkey k = Path (w64 . fromIntegral . fromEnum $ k) (IM.lookup k) (\f -> IM.adjust f k)
+imkey :: IM.Key -> Path (IntMap a) a
+imkey k = Path (w64 . fromIntegral . fromEnum $ k) (IM.lookup k) (\f -> IM.adjust f k)
 
-left :: Path (Either a b) a
-left = Path (w8 0) g p where
-  g (Left x) = Just x
-  g _ = Nothing
-  p f (Left x) = Left (f x)
-  p f other = other
-
-right :: Path (Either a b) b
-right = Path (w8 1) g p where
-  g (Right x) = Just x
-  g _ = Nothing
-  p f (Right x) = Right (f x)
-  p f other = other
+instance LeftRight Either where
+  left = Path (w8 0) g p where
+    g (Left x) = Just x
+    g _ = Nothing
+    p f (Left x) = Left (f x)
+    p f other = other
+  right = Path (w8 1) g p where
+    g (Right x) = Just x
+    g _ = Nothing
+    p f (Right x) = Right (f x)
+    p f other = other
 
 instance Category Path where
   id = Path mempty Just (const id)

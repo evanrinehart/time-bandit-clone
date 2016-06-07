@@ -22,56 +22,68 @@ import GameOver
 import Missile
 import Barn as B
 import Clock
+import Event
+import Prediction
 
 type Rule' = Rule Double TimeBandit
 type Poke' = Poke TimeBandit ()
 type Plan' a = Plan TimeBandit a
+type Event' a = Event Double TimeBandit a
 
+core = playing'
+player = core >>> tbPlayer'
+playerMotion = player >>> plMotion'
+levels = core >>> tbLvls' :: Path TimeBandit Levels
+missilesOnLevel k = levels >>> right >>> imkey k >>> lvlMissiles'
 
-whenPlayerArrives :: PathTo Player
-                  -> PathTo Levels
-                  -> Plan' (Double, Maybe JDir, Cell Tile, Dir)
-whenPlayerArrives _player _levels = do
-  dt <- required =<< timeUntilArrival <$> view (_player >>> _plMotion)
-  pl <- view _player
-  grid <- viewInCurrentLevel _levels _lvlGrid
+whenPlayerArrives :: Event' (Maybe JDir, Cell Tile, Dir)
+whenPlayerArrives = predict $ do
+  dt <- required =<< timeUntilArrival <$> view playerMotion
+  pl <- view player
+  grid <- viewInCurrentLevel lvlGrid'
   let mo = plMotion pl
   let gix = gridIx mo
   let Just cell = G.lookup gix grid
-  return (dt, J.currentDirection (plJoy pl), cell, facing mo)
+  return (InExactly dt (J.currentDirection (plJoy pl), cell, facing mo))
+
+redirectPlayer :: (Maybe JDir, Cell Tile, Dir) -> Poke'
+redirectPlayer (joystick, cell, facing) = do
+  case nextMoveStrategy joystick cell facing of
+    StopPlayer -> stopMotion playerMotion
+    LaunchPlayer dir -> launchPlayer player dir
 
 stopMotion :: PathTo Motion -> Poke'
-stopMotion _mo = update _mo MO.stop
+stopMotion mo = update mo MO.stop
 
 launchPlayer :: PathTo Player -> Dir -> Poke'
 launchPlayer _player dir = do
-  let _mo = _player >>> _plMotion
-  mo <- view _mo
+  mo <- view playerMotion
   let gix = gridIx mo
   let gix' = gixPlusDir dir gix
   let x' = realToFrac $$ gix
   let v' = MO.currentSpeed mo *. dirToVec dir
-  update _mo (const (launch dir gix' (x',v')))
+  update playerMotion (const (launch dir gix' (x',v')))
 
---viewInCurrentLevel :: PathTo Levels -> Path Level a -> Plan' a
-viewInCurrentLevel _levels _p = do
-  k <- view (_levels >>> _first)
-  view (_levels >>> _second >>> _imkey k >>> _p)
+viewInCurrentLevel :: Path Level a -> Plan TimeBandit a
+viewInCurrentLevel p = do
+  k <- view (levels >>> left)
+  view (levels >>> right >>> imkey k >>> p)
+
+viewInCurrentLevel' :: Path Level a -> Poke TimeBandit a
+viewInCurrentLevel' p = do
+  k <- view (levels >>> left)
+  view (levels >>> right >>> imkey k >>> p)
 
 newMissile :: LevelNo -> Motion -> MissileType -> Poke'
 newMissile k mo mty =
-  update
-  (_playing >>> _tbLvls >>> _second >>> _imkey k >>> _lvlMissiles)
-  (insertThing mo (mkMissile 0))
+  update (missilesOnLevel k) (insertThing mo (mkMissile 0))
 
-removeMissile :: PathTo Levels -> LevelNo -> Int -> Poke'
-removeMissile levels lNo k =
-  update
-  (levels >>> _second >>> _imkey lNo >>> _lvlMissiles)
-  (B.deleteThing k)
+removeMissile :: (LevelNo, Int) -> Poke'
+removeMissile (lNo, mNo) =
+  update (missilesOnLevel lNo) (B.deleteThing mNo)
 
-whenMissileExpires :: PathTo Levels -> Plan' (Double, LevelNo, Int)
-whenMissileExpires levels = ans where
+whenMissileExpires :: Event' (LevelNo, Int)
+whenMissileExpires = predict ans where
   f lNo lvl Nothing = B.foldr (g lNo) Nothing (lvlMissiles lvl)
   f lNo lvl accum = B.foldr (g lNo) accum (lvlMissiles lvl)
   g lNo k (Missile (Clock dt _) _) Nothing = Just (dt, lNo, k)
@@ -80,5 +92,5 @@ whenMissileExpires levels = ans where
     else r
   ans = do
     (_,im) <- view levels
-    required $ IM.foldrWithKey f Nothing im
-
+    (dt,lno,missile) <- required $ IM.foldrWithKey f Nothing im
+    return (InExactly dt (lno,missile))

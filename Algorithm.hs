@@ -3,189 +3,196 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Algorithm where
 
 import Prelude hiding ((.),id)
-import qualified Data.IntMap as IM
-import Data.IntMap (IntMap)
-import Data.List (intersperse, foldl')
-import qualified Data.IntSet as IS
-import Data.IntSet (IntSet)
+--import qualified Data.IntMap as IM
+--import Data.IntMap (IntMap)
+import Data.List
+--import qualified Data.IntSet as IS
+--import Data.IntSet (IntSet)
 import Control.Concurrent
 import Control.Exception
-import Data.Fixed
+--import Data.Fixed
 import Control.Monad (forM_)
+import Control.Monad.State
 import Data.Trie as T
-import Data.HashMap.Strict as H
+import qualified Data.HashMap.Strict as H
+import Data.HashMap.Strict (HashMap)
+import Data.ByteString (ByteString)
 
-import Dispatcher2 as D
-import DepIndex2 as DI
-import Plan
-import Poke
-import Event
-import Port
 import Animation as A
 import Path
+import Plan
+import Poke
+import Port
+import Prediction
+import Event as E
+import Dispatcher2 as D
+import DepIndex2 as DI
+--import Workers as W
 import Viewing
-import Workers as W
 
 import Control.Monad (when)
 import Control.Category
 
-{-
-  0. generate pros from rules, evalute to get initial depindex and dispatcher
-  1. wait for next event
-  2. take all actions happening now, and sort them by priority. execute the
-     poke actions in order to get an abort or list of paths modified for each
-     one.
-  3. search for a set of rules that were "interrupted" by each modification
-  4. cancel all action of interrupted rules, and remove them from the index.
-  5. go to step 0, except eval only the interrupted rules
--}
-
-type Rule s dt = Event s dt (Poke s ())
+type Rule dt s = Event dt s (Poke s ())
 
 data Sim dt s = Sim
   { simModel :: !s
-  , simAnimation :: A dt s
-  , simRules :: [Rule s dt]
+  , simAnim  :: A dt s
+  , simRules :: [Rule dt s]
+
   , simPreds :: HashMap PrName (AnyPred dt s)
-  , simDisp :: Disp2 dt Poke s ()
-  , simIndex :: !DepIx2 PrName ByteString
+  , simDisp  :: Disp2 dt PrName (Poke s ())
+  , simIndex :: DepIx2 PrName ByteString
+  , simCounter :: Int
   } 
 
-instance (Show dt, Show s) => Show (Sim dt s) where
-  show (Sim x _ ix rules disp) = "Sim {" ++ (concat . intersperse "," $
-    [show x
-    ,show ix
-    ,show (map (const "<rule>") rules)
-    ,show (fmap fst disp)
-    ] ) ++ "}"
-
-newSimulation :: (Num dt, Ord dt) => A dt s -> s -> [Rule dt s] -> Sim dt s
-newSimulation adv s rules = Sim s adv ix rules disp where
-  (actions0, ix) = evaluatePreds s rules
-  disp = D.Disp 0 (map (\(dt,i,act) -> (dt,(i,act))) actions0)
-
-evaluatePreds :: s -> [(Int, Rule dt s)] -> ([(dt, Int, Poke s ())], DepIndex)
-evaluatePreds s xs = fmap DI.fromList (go [] [] xs) where
-  go o ix [] = (o, ix)
-  go o ix ((i,pl):xs) = case runPlan s pl of
-    (Nothing, reps) -> go o (map (,i) reps ++ ix) xs
-    (Just (dt,poke), reps) -> go ((dt,i,poke):o) (map (,i) reps ++ ix) xs
-
-animate :: (Num dt, Ord dt) => dt -> Sim dt s -> Either (Sim dt s) (Sim dt s, dt, Int, Poke s ())
-animate dt sim@(Sim s adv ix rs disp) = case D.advance dt disp of
-  (Nothing, disp') -> Left (Sim (adv dt s) adv ix rs disp')
-  (Just ((i,poke), dt'), disp') -> Right (sim', dt - dt', i, poke) where
-    sim' = Sim (adv dt' s) adv (DI.remove i ix) rs disp'
-
-applyPoke :: (Num dt, Ord dt) => Poke s () -> Sim dt s -> (Sim dt s, [Effect s])
-applyPoke poke sim@(Sim s adv ix rs disp) = case runPoke s poke of
-  Left msg -> (sim, [])
-  Right (_,s',reps,effs) -> (Sim s' adv ix''' rs disp'', effs) where
-    affectedRids = foldl' IS.union IS.empty (map (DI.match ix) reps)
-    disp' = D.deleteBy ((`IS.member` affectedRids).fst) disp
-    ix' = DI.removeMany affectedRids ix
-    getRuleWithNumber i = (i,r) where
-      Just r = IM.lookup i rs
-    numberedRules = map getRuleWithNumber (IS.toList affectedRids)
-    (newTasks, ix'') = evaluateRules s' numberedRules
-    ix''' = ix' `DI.union` ix''
-    disp'' = foldl' (\d (dt,i,poke) -> D.insert dt (i,poke) d) disp' newTasks
-
-evalRule :: (Num dt, Ord dt) => Int -> Sim dt s -> Sim dt s
-evalRule i (Sim s adv ix rs disp) = case IM.lookup i rs of
-  Nothing -> error ("rule " ++ show i ++ " not found")
-  Just pl -> case runPlan s pl of
-    (Nothing, reps) -> Sim s adv ix' rs disp where
-      ix' = ix `DI.union` (DI.fromList (map (,i) reps))
-    (Just (dt,poke), reps) -> Sim s adv ix' rs disp' where
-      ix' = ix `DI.union` (DI.fromList (map (,i) reps))
-      disp' = D.insert dt (i,poke) disp
-
 data Interface dt s = Interface
-   { simWait  :: dt -> IO ()
-   , simImage :: forall a . (s -> a) -> IO a
-   , simWrite :: forall a . Port s a -> a -> IO ()
-   , simKill  :: IO ()
-   , simDebug :: IO (Sim dt s)
+   { simWait      :: dt -> IO ()
+   , simRender    :: forall a . (s -> a) -> IO a
+   , simWritePort :: forall a . Port a -> a -> IO ()
+   , simKill      :: IO ()
+   , simDebug     :: IO (Sim dt s)
    }
 
 instance Show (Interface dt s) where
   show _ = "<Interface>"
 
-test :: (Num dt, RealFrac dt, Show s) => Sim dt s -> IO ()
-test sim = go us dt sim where
-  million = 1000000
-  dt = 0.1
-  us = ceiling (dt * million)
-  go us dt sim = do
-    threadDelay us
-    case animate dt sim of
-      Left sim' -> test sim'
-      Right (sim', dt', ruleId, poke) -> do
-        let (sim'', effs) = applyPoke poke sim'
-        --execEffects workers mv effs
-        let sim''' = evalRule ruleId sim''
-        --asyncs
-        go (ceiling (dt' * million)) dt' sim'''
+instance (Show dt, Show s) => Show (Sim dt s) where
+  showsPrec d sim =
+    showParen (d > 10) $
+    showString "Sim " .
+    showsPrec 11 (simModel sim) . 
+    showString " " .
+    showsPrec 11 (fmap (const "<poke>") (simDisp sim)) .
+    showString " " .
+    showsPrec 11 (simIndex sim) .
+    showString " " .
+    showsPrec 11 (simCounter sim)
 
-handleInput :: (Num dt, Ord dt)
-            => Workers
-            -> MVar (Sim dt s)
-            -> Poke s ()
-            -> IO ()
-handleInput workers mv poke = modifyMVar_ mv $ \sim -> do
-  let (sim', effs) = applyPoke poke sim
-  execEffects workers mv effs
-  return sim'
+takeCounter :: State (Sim dt s) Int
+takeCounter = do
+  c <- gets simCounter
+  modify (\sim -> sim { simCounter = c + 1 })
+  return c
 
-runSim :: (Num dt, Ord dt)
-       => A dt s
-       -> s
-       -> [Rule dt s]
-       -> IO (Interface dt s)
-runSim a s rules = run (newSimulation a s rules)
+shiftDispatcher :: (Num dt, Ord dt)
+                => dt -> State (Sim dt s) (Maybe (PrName,Poke s (),dt,dt))
+shiftDispatcher dt = do
+  d <- gets simDisp
+  case D.advance dt d of
+    Left d' -> do
+      modify (\sim -> sim { simDisp = d' })
+      return Nothing
+    Right (dt1, dt2, name, poke, d') -> do
+      modify (\sim -> sim { simDisp = d' })
+      return (Just (name, poke, dt1, dt2))
 
-run :: (Num dt, Ord dt) => Sim dt s -> IO (Interface dt s)
-run sim = iface where
-  iface = do
-    mv <- newMVar sim 
-    workers <- newWorkers
-    return $ Interface
-      (advance mv workers)
-      (image mv)
-      (input mv workers)
-      (kill mv workers)
-      (debug mv)
-  advance mv workers dt = modifyMVar_ mv (go dt) where
-    go dt sim = case animate dt sim of
-      Left sim' -> evaluate sim'
-      Right (sim', dt', ruleId, poke) -> do
-        let (sim'', effs) = applyPoke poke sim'
-        let sim''' = evalRule ruleId sim''
-        execEffects workers mv effs
-        go dt' sim'''
-  image mv f = withMVar mv (return . f . simModel)
-  input mv workers poke = modifyMVar_ mv $ \sim -> do
-    let (sim', effs) = applyPoke poke sim
-    execEffects workers mv effs
-    return sim'
-  kill mv workers = do
-    takeMVar mv
-    clearWorkers workers
-  debug mv = withMVar mv return
-  --debug mv = undefined
+harvestDeps :: Trie () -> State (Sim dt s) [PrName]
+harvestDeps tr = do
+  ix <- gets simIndex
+  let (names, ix') = DI.harvest tr ix
+  modify (\sim -> sim { simIndex = ix' })
+  return names
 
-execEffects :: Workers -> MVar (Sim dt s) -> [Effect s] -> IO ()
-execEffects _ _ effs = forM_ effs $ \case
+rememberDeps :: PrName -> Trie () -> State (Sim dt s) ()
+rememberDeps name deps = do
+  ix <- gets simIndex
+  let ix' = foldl' (flip (DI.insert name)) ix (T.keys deps)
+  modify (\sim -> sim { simIndex = ix' })
+
+unschedulePred :: PrName -> State (Sim dt s) ()
+unschedulePred name = do
+  d <- gets simDisp
+  modify (\sim -> sim { simDisp = D.delete name d })
+
+massSchedule :: (Num dt)
+             => PrName -> dt -> [((Int,Int),Poke s ())] -> State (Sim dt s) ()
+massSchedule name dt entries = do
+  d <- gets simDisp
+  modify (\sim -> sim { simDisp = D.insert name dt entries d })
+
+shiftModel :: dt -> State (Sim dt s) ()
+shiftModel dt = do
+  s <- gets simModel
+  ani <- gets simAnim
+  modify (\sim -> sim { simModel = ani dt s })
+
+applyPoke :: (Num dt) => Poke s () -> State (Sim dt s) [Effect s]
+applyPoke poke = do
+  s <- gets simModel
+  case runPoke s poke of
+    Nothing -> return []
+    Just (_,s',affectedDeps,effs) -> do
+      modify (\sim -> sim { simModel = s' })
+      affectedPreds <- harvestDeps affectedDeps
+      forM_ affectedPreds $ \name -> do
+        unschedulePred name
+        Just (AnyPred p) <- gets (H.lookup name . simPreds)
+        let (result, deps) = runPredictor p s'
+        rememberDeps name deps
+        rules <- gets simRules
+        case result of
+          InExactly dt x -> do
+            let pokess = zipWith (\i e -> applyPred i p x e) [0..] rules
+            let pokes = concat pokess
+            massSchedule name dt pokes
+          NotWithin dt -> do
+            massSchedule name dt [((0,0),return ())]
+          _ -> return ()
+      return effs
+
+runMVarState :: MVar s -> State s a -> IO a
+runMVarState mv action = modifyMVar mv $ \s -> do
+  let (x, s') = runState action s
+  return (s', x)
+
+chewTime :: (Num dt, Ord dt) => dt -> State (Sim dt s) [Effect s]
+chewTime dt = shiftDispatcher dt >>= \case
+  Nothing -> do
+    shiftModel dt
+    return []
+  Just (prName, poke, dt1, dt2) -> do
+    shiftModel dt1
+    effs1 <- applyPoke poke
+    effs2 <- chewTime dt2
+    return (effs1 ++ effs2)
+
+setupPortWrite :: Port a -> a -> State (Sim dt s) [Poke s ()]
+setupPortWrite port x = do
+  rules <- gets simRules
+  return $ concatMap (E.applyPortWrite port x) rules
+
+execEffects :: [Effect s] -> IO ()
+execEffects effs = forM_ effs $ \case
   FireAndForget io -> io
-  RequestWithCallback io mtime cb -> do
-    return ()
+  _ -> error "async req not implemented"
 
-plan :: dt -> Poke s () -> Plan s (dt, Poke s ())
-plan !dt poke = return (dt, poke)
-
-immediately :: Num dt => Poke s () -> Plan s (dt, Poke s ())
-immediately poke = plan 0 poke
+simulate :: (Num dt, Ord dt)
+         => s
+         -> A dt s
+         -> [Rule dt s]
+         -> IO (Interface dt s)
+simulate s ani rules = do
+  throw (userError "not properly initialized")
+  let preds = H.empty
+  let disp = D.empty
+  let ix = DI.empty
+  mv <- newMVar (Sim s ani rules preds disp ix 0)
+  return $ Interface
+    { simWait = \dt -> do
+        effs <- runMVarState mv (chewTime dt)
+        execEffects effs
+    , simWritePort = \port x -> do
+        effs <- runMVarState mv $ do
+          pokes <- setupPortWrite port x
+          concat <$> mapM applyPoke pokes
+        execEffects effs
+        return ()
+    , simRender = \render -> withMVar mv (return . render . simModel)
+    , simKill = takeMVar mv >> return ()
+    , simDebug = readMVar mv
+    }
