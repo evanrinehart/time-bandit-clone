@@ -177,7 +177,6 @@ simulate :: (Num dt, Ord dt)
          -> [Rule dt s]
          -> IO (Interface dt s)
 simulate s ani rules = do
-  throw (userError "not properly initialized")
   let preds = H.empty
   let disp = D.empty
   let ix = DI.empty

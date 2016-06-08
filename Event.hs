@@ -51,6 +51,7 @@ fromEvent e0 hm = case e0 of
   ECat e1 e2 -> fromEvent e1 hm >>= fromEvent e2
   EMap f e -> fromEvent e hm
   EGate check e -> fromEvent e hm
+  EJust e -> fromEvent e hm
   _ -> return hm
 
 -- produce a prioritized set of Pokes from a prediction plan object
@@ -76,6 +77,10 @@ applyPred ruleNo pred0 x e0 = fst $ go id e0 [] 0 where
       let (outs', order') = go f e1 outs order in
       go f e2 outs' (order' + 1)
     EMap g e' -> go (f . g) e' outs order
+    EJust e' -> go h e' outs order where
+      h mb = case mb of
+        Nothing -> return ()
+        Just b -> f b
     EGate check e' -> (subpokes', order') where
       (subpokes, order') = go f e' [] order
       on2 f (x,y) = (x, f y)
@@ -99,6 +104,10 @@ applyPortWrite port x e0 = reverse (go id e0 []) where
       let outs' = go f e1 outs in
       go f e2 outs'
     EMap g e' -> go (f . g) e' outs
+    EJust e' -> go h e' outs where
+      h mb = case mb of
+        Nothing -> return ()
+        Just b -> f b
     EGate check e' -> subpokes' where
       subpokes = go f e' []
       g poke = check <$> view id >>= flip when poke
